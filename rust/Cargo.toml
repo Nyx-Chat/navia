@@ -1,0 +1,18 @@
+[workspace]
+members = ["navia-core"]
+resolver = "2"
+
+[workspace.dependencies]
+uniffi = "0.28.2"
+didcomm = { version = "0.4.1", features = ["uniffi"] }
+askar-storage = "0.2.0"
+async-trait = "0.1.83"
+serde_json = "1.0.132"
+serde = { version = "1.0.214", features = ["derive"] }
+did-peer = "0.2.1"
+affinidi-did-resolver-cache-sdk = "0.2.1"
+ssi-core = "0.2.2"
+ssi-dids-core = "0.1.2"
+anyhow = "1.0.94"
+thiserror = "2.0.6"
+tokio = { version = "1.41.0", features = ["rt", "rt-multi-thread", "macros"] }

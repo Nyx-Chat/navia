@@ -1,0 +1,34 @@
+[package]
+name = "navia-core"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["cli"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+uniffi.workspace = true
+didcomm.workspace = true
+askar-storage.workspace = true
+async-trait.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+did-peer.workspace = true
+affinidi-did-resolver-cache-sdk.workspace = true
+ssi-core.workspace = true
+ssi-dids-core.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+jni = "0.21"
+
+
+[features]
+cli = ["uniffi/cli"]
+
+[lib]
+crate-type = ["cdylib", "lib"]

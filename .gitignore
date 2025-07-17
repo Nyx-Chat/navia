@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+target/
+
+# Build outputs
+build/
+dist/
+*.apk
+*.aab
+*.ipa
+*.app
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+
+# iOS
+ios/Pods/
+ios/build/
+ios/DerivedData/
+ios/*.xcworkspace/
+ios/*.xcodeproj/xcuserdata/
+
+# Rust
+rust/target/
+Cargo.lock
+
+# Claude
+.claude/
