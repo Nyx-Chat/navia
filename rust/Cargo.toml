@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 uniffi = "0.28.2"
 didcomm = { version = "0.4.1", features = ["uniffi"] }
-askar-storage = { git = "https://github.com/openwallet-foundation/askar", branch = "main" }
+askar-storage = { git = "https://github.com/openwallet-foundation/askar.git", branch = "main" }
 async-trait = "0.1.83"
 serde_json = "1.0.132"
 serde = { version = "1.0.214", features = ["derive"] }
