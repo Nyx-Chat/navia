@@ -14,9 +14,6 @@ mod error;
 mod messaging;
 mod resolvers;
 
-#[cfg(target_os = "android")]
-mod jni_bridge;
-
 pub use messaging::{DidComInterface, DidCommError};
 
 // use didcomm::did::DIDDoc;

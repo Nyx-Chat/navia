@@ -24,7 +24,6 @@ ssi-dids-core.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-jni = "0.21"
 
 
 [features]

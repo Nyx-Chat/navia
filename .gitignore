@@ -46,6 +46,10 @@ android/captures/
 android/.externalNativeBuild/
 android/.cxx/
 
+# Generated Android artifacts (rebuilt by script)
+android/src/main/java/uniffi/
+android/src/main/jniLibs/
+
 # iOS
 ios/Pods/
 ios/build/
