@@ -59,7 +59,6 @@ ios/*.xcodeproj/xcuserdata/
 
 # Rust
 rust/target/
-Cargo.lock
 
 # Claude
 .claude/
