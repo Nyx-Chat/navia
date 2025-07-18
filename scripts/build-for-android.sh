@@ -122,9 +122,15 @@ fi
 # Build Rust library
 cd "$RUST_DIR"
 
-CARGO_FLAGS=""
+# Ensure we use the committed Cargo.lock
+if [ ! -f "Cargo.lock" ]; then
+    echo "ERROR: Cargo.lock not found!"
+    exit 1
+fi
+
+CARGO_FLAGS="--locked"
 if [ "$BUILD_MODE" = "release" ]; then
-    CARGO_FLAGS="--release"
+    CARGO_FLAGS="--locked --release"
 fi
 
 # Create output directories
