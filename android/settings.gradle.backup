@@ -1,4 +1,0 @@
-rootProject.name = "Navia"
-include ':app'
-include ':navia-lib'
-project(':navia-lib').projectDir = new File('.')
