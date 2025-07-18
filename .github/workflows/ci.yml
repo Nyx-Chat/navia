@@ -25,12 +25,6 @@ jobs:
       with:
         toolchain: stable
         override: true
-    
-    - name: Clear cargo cache
-      run: |
-        rm -rf ~/.cargo/registry/index
-        rm -rf ~/.cargo/registry/cache
-        rm -rf ~/.cargo/git
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -43,16 +37,6 @@ jobs:
         
     - name: Install cargo-ndk
       run: cargo install cargo-ndk
-    
-    - name: Debug - Check Cargo.lock
-      run: |
-        cd rust
-        echo "=== Checking Cargo.lock exists ==="
-        ls -la Cargo.lock
-        echo "=== Checking askar-storage in Cargo.lock ==="
-        grep -A2 "askar-storage" Cargo.lock || true
-        echo "=== Checking Cargo.toml ==="
-        grep -A1 "askar-storage" Cargo.toml || true
     
     - name: Build Rust libraries
       run: |

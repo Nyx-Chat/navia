@@ -145,10 +145,8 @@ for target_pair in "${TARGETS[@]}"; do
     echo -e "${YELLOW}Building for $TARGET ($ABI)...${NC}"
     
     if command -v cargo-ndk &> /dev/null; then
-        echo "Using cargo-ndk with flags: $CARGO_FLAGS"
-        cargo ndk --target "$TARGET" --platform 21 -- build --locked $CARGO_FLAGS
+        cargo ndk --target "$TARGET" --platform 21 -- build $CARGO_FLAGS
     else
-        echo "Using cargo build with flags: $CARGO_FLAGS"
         cargo build --target "$TARGET" $CARGO_FLAGS
     fi
     
@@ -172,9 +170,5 @@ cargo run --features cli --bin uniffi-bindgen generate \
 echo -e "${GREEN}✅ Build complete!${NC}"
 echo -e "${GREEN}Output: $OUTPUT_DIR${NC}"
 
-# If in CI, also run Android build
-if [ "$CI" = "true" ]; then
-    echo -e "${YELLOW}CI detected - building Android APK...${NC}"
-    cd "$ANDROID_PROJECT"
-    ./gradlew assembleRelease
-fi
+# If in CI and package mode, we're done
+# (Android library build happens separately in the workflow)
