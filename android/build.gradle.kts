@@ -13,10 +13,6 @@ android {
         
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
-        
-        // Version from gradle.properties or environment
-        val versionName = project.findProperty("VERSION_NAME") as String? ?: "1.0.0"
-        buildConfigField("String", "VERSION", "\"$versionName\"")
     }
 
     buildTypes {
@@ -72,51 +68,51 @@ tasks.preBuild {
 }
 
 // Publishing configuration for GitHub Packages
-publishing {
-    publications {
-        register<MavenPublication>("release") {
-            groupId = "com.nyx"
-            artifactId = "navia"
-            version = project.findProperty("VERSION_NAME") as String? ?: "1.0.0"
-            
-            afterEvaluate {
+afterEvaluate {
+    publishing {
+        publications {
+            register<MavenPublication>("release") {
+                groupId = "com.nyx"
+                artifactId = "navia"
+                version = project.findProperty("VERSION_NAME") as String? ?: "1.0.0"
+                
                 from(components["release"])
-            }
-            
-            pom {
-                name.set("Navia")
-                description.set("DIDComm library for Nyx")
-                url.set("https://github.com/Nyx-Chat/navia")
                 
-                licenses {
-                    license {
-                        name.set("Proprietary")
-                    }
-                }
-                
-                developers {
-                    developer {
-                        id.set("nyx-team")
-                        name.set("Nyx Development Team")
-                    }
-                }
-                
-                scm {
-                    connection.set("scm:git:git://github.com/Nyx-Chat/navia.git")
-                    developerConnection.set("scm:git:ssh://github.com/Nyx-Chat/navia.git")
+                pom {
+                    name.set("Navia")
+                    description.set("DIDComm library for Nyx")
                     url.set("https://github.com/Nyx-Chat/navia")
+                    
+                    licenses {
+                        license {
+                            name.set("Proprietary")
+                        }
+                    }
+                    
+                    developers {
+                        developer {
+                            id.set("nyx-team")
+                            name.set("Nyx Development Team")
+                        }
+                    }
+                    
+                    scm {
+                        connection.set("scm:git:git://github.com/Nyx-Chat/navia.git")
+                        developerConnection.set("scm:git:ssh://github.com/Nyx-Chat/navia.git")
+                        url.set("https://github.com/Nyx-Chat/navia")
+                    }
                 }
             }
         }
-    }
-    
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Nyx-Chat/navia")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
-                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String?
+        
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/Nyx-Chat/navia")
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
+                    password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.token") as String?
+                }
             }
         }
     }
