@@ -128,9 +128,9 @@ if [ ! -f "Cargo.lock" ]; then
     exit 1
 fi
 
-CARGO_FLAGS="--locked"
+CARGO_FLAGS=""
 if [ "$BUILD_MODE" = "release" ]; then
-    CARGO_FLAGS="--locked --release"
+    CARGO_FLAGS="--release"
 fi
 
 # Create output directories
@@ -145,8 +145,10 @@ for target_pair in "${TARGETS[@]}"; do
     echo -e "${YELLOW}Building for $TARGET ($ABI)...${NC}"
     
     if command -v cargo-ndk &> /dev/null; then
-        cargo ndk --target "$TARGET" --platform 21 -- build $CARGO_FLAGS
+        echo "Using cargo-ndk with flags: $CARGO_FLAGS"
+        cargo ndk --target "$TARGET" --platform 21 -- build --locked $CARGO_FLAGS
     else
+        echo "Using cargo build with flags: $CARGO_FLAGS"
         cargo build --target "$TARGET" $CARGO_FLAGS
     fi
     

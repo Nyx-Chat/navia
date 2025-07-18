@@ -28,6 +28,12 @@ jobs:
       with:
         toolchain: stable
         override: true
+    
+    - name: Clear cargo cache
+      run: |
+        rm -rf ~/.cargo/registry/index
+        rm -rf ~/.cargo/registry/cache
+        rm -rf ~/.cargo/git
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
