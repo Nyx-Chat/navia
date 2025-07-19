@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.nyx.navia"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 23
@@ -32,6 +32,15 @@ android {
     
     kotlinOptions {
         jvmTarget = "17"
+    }
+    
+    // Ensure 16KB alignment for native libraries
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+            // Keep native libraries uncompressed for proper alignment
+            keepDebugSymbols += "**/*.so"
+        }
     }
     
     publishing {
