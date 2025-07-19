@@ -131,6 +131,60 @@ This configuration allows:
 - **GitHub Actions**: Automatic authentication using GITHUB_TOKEN
 - **Local publishing**: Uses your PAT from `~/.gradle/gradle.properties`
 
+## Using Navia in nyx-android
+
+### Repository Configuration
+
+Add the GitHub Packages repository to your `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/Nyx-Chat/navia")
+            credentials {
+                // Use local.properties or environment variables
+                username = providers.gradleProperty("gpr.user").orNull 
+                    ?: System.getenv("GITHUB_ACTOR")
+                password = providers.gradleProperty("gpr.token").orNull 
+                    ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
+```
+
+### Authentication Setup
+
+Create `local.properties` in your project root:
+```properties
+gpr.user=your-github-username
+gpr.token=your-personal-access-token-with-read-packages
+```
+
+### Adding the Dependency
+
+In your app's `build.gradle.kts`:
+```kotlin
+dependencies {
+    implementation("com.nyx:navia:1.0.5")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+}
+```
+
+### CI/CD Configuration
+
+For GitHub Actions in consuming projects:
+```yaml
+- name: Setup GitHub Packages
+  run: |
+    echo "GITHUB_ACTOR=${{ github.actor }}" >> $GITHUB_ENV
+    echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+```
+
 ## CI/CD
 
 ### Workflows
@@ -171,6 +225,22 @@ If you encounter sqlx-related build errors:
 1. **Authentication**: Ensure `GITHUB_TOKEN` has `packages:write` permission
 2. **Version conflicts**: Increment version in tag before publishing
 3. **Build failures**: Check that local build works before tagging
+
+### Package Consumption Issues
+
+1. **"Could not find com.nyx:navia"**
+   - Check authentication is configured in `local.properties`
+   - Verify package was published successfully on GitHub
+   - Check repository URL is correct in settings.gradle.kts
+
+2. **"Received status code 401"**
+   - GitHub token may be expired
+   - Token needs `read:packages` permission
+   - Check token is correctly set in `local.properties`
+
+3. **Version Updates**
+   - After publishing new version, update dependency in consuming project
+   - Run `./gradlew clean build --refresh-dependencies` to fetch latest
 
 ## Development Workflow
 

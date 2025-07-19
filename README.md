@@ -9,7 +9,6 @@ Navia is a high-performance DIDComm v2 messaging library for Android, built with
 - 📦 **Native Kotlin Types** - Structured data types, no JSON string manipulation required
 - ⚡ **Async/Await Support** - Non-blocking operations throughout
 - 🗄️ **Aries Askar Storage** - Secure key management and storage
-- 📱 **Android Optimized** - Built specifically for Android applications
 
 ## Installation
 
@@ -187,7 +186,7 @@ data class KeyValue(
 
 ### Core Methods
 
-All methods are suspend functions (async):
+All methods are suspending functions (async):
 
 - `open(path: String, seed: ByteArray)`: Initialize database
 - `generateDid(uri: String, routingKeys: List<String>): String`: Create new DID
@@ -238,22 +237,6 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development instructions inclu
 - Publishing new versions
 - CI/CD workflows
 - Troubleshooting
-
-## Performance Optimizations
-
-Navia includes several performance optimizations:
-
-- ✅ **Shared Tokio Runtime**: Single runtime instance, no per-call overhead
-- ✅ **Zero JSON Serialization**: Native Kotlin types throughout
-- ✅ **Batch Operations**: Efficient bulk database operations
-- ✅ **Connection Pooling**: Built-in Aries Askar connection management
-- ✅ **Async/Await**: Non-blocking operations for UI responsiveness
-
-## Version History
-
-- **1.0.4**: Fixed Tokio runtime context for FFI calls
-- **1.0.3**: Published to GitHub Packages
-- **1.0.0**: Initial release with pure UniFFI architecture
 
 ## License
 

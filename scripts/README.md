@@ -13,6 +13,9 @@ This is the ONLY build script. It does everything.
 # Local development (optimized build)
 ./build-for-android.sh --release
 
+# Local development (all architectures)
+./build-for-android.sh --all
+
 # Package build (for publishing to GitHub Packages)
 ./build-for-android.sh --package
 ```
@@ -29,4 +32,9 @@ This is the ONLY build script. It does everything.
 - Outputs to `navia/android/src/main/`
 - Used by GitHub Actions to publish
 
-That's it. One script, two modes.
+**All architectures mode** (`--all`):
+- Builds for ALL Android architectures
+- Outputs to `nyx-android/navia/src/main/`
+- Useful for testing multi-architecture support locally
+
+That's it. One script, multiple modes.
