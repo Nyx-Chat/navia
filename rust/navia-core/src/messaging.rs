@@ -314,10 +314,25 @@ impl DidComInterface {
                 .clone()
         };
         
-        let (message, _metadata) = messaging
-            .unpack_message(&msg)
-            .await
-            .map_err(|e| DidCommError::UnpackingError { message: e.to_string() })?;
+        // Check if we're already in a Tokio context
+        let (message, _metadata) = if Handle::try_current().is_ok() {
+            // We're in a context, proceed normally
+            messaging
+                .unpack_message(&msg)
+                .await
+                .map_err(|e| DidCommError::UnpackingError { message: e.to_string() })?
+        } else {
+            // We need to provide context - use our runtime
+            let runtime = self.runtime.clone();
+            let msg_clone = msg.clone();
+            let handle = runtime.spawn(async move {
+                messaging.unpack_message(&msg_clone).await
+            });
+            
+            handle.await
+                .map_err(|e| DidCommError::GeneralError { message: e.to_string() })?
+                .map_err(|e| DidCommError::UnpackingError { message: e.to_string() })?
+        };
             
         // Extract the content from the message body
         let body = message.body.get("content")
@@ -354,13 +369,29 @@ impl DidComInterface {
                 .ok_or(DidCommError::GeneralError { message: "Not initialized".to_string() })?
                 .clone()
         };
+        
+        // Check if we're already in a Tokio context
+        if Handle::try_current().is_ok() {
+            // We're in a context, proceed normally
+            let (packed_message, _metadata) = messaging
+                .pack_message(&message, &to, &from)
+                .await
+                .map_err(|e| DidCommError::PackingError { message: e.to_string() })?;
+                
+            Ok(packed_message)
+        } else {
+            // We need to provide context - use our runtime
+            let runtime = self.runtime.clone();
+            let handle = runtime.spawn(async move {
+                messaging.pack_message(&message, &to, &from).await
+            });
             
-        let (packed_message, _metadata) = messaging
-            .pack_message(&message, &to, &from)
-            .await
-            .map_err(|e| DidCommError::PackingError { message: e.to_string() })?;
+            let result = handle.await
+                .map_err(|e| DidCommError::GeneralError { message: e.to_string() })?
+                .map_err(|e| DidCommError::PackingError { message: e.to_string() })?;
             
-        Ok(packed_message)
+            Ok(result.0)
+        }
     }
 
     // Async method for DID generation (involves database operations)

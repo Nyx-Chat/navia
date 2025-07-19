@@ -249,6 +249,71 @@ All methods throw `DidCommError` which can be one of:
 - `UnpackingError`
 - `GeneralError`
 
+## Publishing
+
+Navia is published as a private Android AAR package to GitHub Packages.
+
+### Version Release
+
+To publish a new version:
+
+1. Create and push a version tag:
+```bash
+git tag v1.0.4
+git push origin v1.0.4
+```
+
+2. The GitHub Actions workflow will automatically:
+   - Build the library for all architectures
+   - Generate Kotlin bindings
+   - Publish to GitHub Packages
+
+### Manual Publishing
+
+For manual publishing during development:
+
+```bash
+# Build with package configuration
+cd scripts
+./build-for-android.sh --package
+
+# Publish to GitHub Packages
+cd ../android
+./gradlew publish -PVERSION_NAME=1.0.4
+```
+
+### Consuming the Package
+
+In your Android project's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/Nyx-Chat/navia")
+            credentials {
+                username = "your-github-username"
+                password = "your-github-token-with-read-packages"
+            }
+        }
+    }
+}
+```
+
+Then in your `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    implementation("com.nyx:navia:1.0.4")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+}
+```
+
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development instructions.
+
 ## License
 
-[Your License Here]
+Proprietary - Nyx Chat
