@@ -37,9 +37,16 @@ android {
     // Ensure 16KB alignment for native libraries
     packaging {
         jniLibs {
+            // Use uncompressed native libraries for 16KB alignment
             useLegacyPackaging = false
             // Keep native libraries uncompressed for proper alignment
             keepDebugSymbols += "**/*.so"
+        }
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        dex {
+            useLegacyPackaging = false
         }
     }
     
