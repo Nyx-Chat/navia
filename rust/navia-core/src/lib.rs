@@ -1,25 +1,20 @@
-// pub mod askardb;
-// pub mod error;
-// pub mod messaging;
-// mod resolvers;
-//
-// pub use didcomm::did::DIDDoc;
-// pub use didcomm::secrets::Secret;
-// pub use didcomm::Message;
-// pub use didcomm::PackEncryptedOptions;
-// pub use didcomm::UnpackOptions;
+//! Navia - DIDComm messaging library
+//! 
+//! This library provides DIDComm v2 messaging capabilities with
+//! a clean architecture separating FFI concerns from core logic.
 
+// Internal modules - the old structure is still here for now
+// to ensure we don't break anything during refactoring
 mod askardb;
 mod error;
-mod messaging;
-mod resolvers;
 
-pub use messaging::{DidComInterface, DidCommError};
+// New architecture modules
+pub mod core;
+pub mod ffi;
+pub mod infrastructure;
 
-// use didcomm::did::DIDDoc;
-// use didcomm::secrets::Secret;
-// use didcomm::Message;
-// use didcomm::PackEncryptedOptions;
-// use didcomm::UnpackOptions;
+// Re-export the FFI interface for UniFFI
+pub use ffi::{DidComInterface, DidCommError};
 
+// Set up UniFFI scaffolding
 uniffi::setup_scaffolding!();

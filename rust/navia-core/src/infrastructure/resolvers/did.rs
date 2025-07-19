@@ -1,3 +1,7 @@
+//! DID resolver implementation using Askar
+//! 
+//! Resolves DIDs using the Affinidi DID resolver cache.
+
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
 use async_trait::async_trait;
 use didcomm::did::{
