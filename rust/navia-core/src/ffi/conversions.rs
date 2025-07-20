@@ -5,14 +5,19 @@
 
 use crate::ffi::types::{DIDCommMessage, KeyValue};
 use crate::core::didcomm::message::{Message, MessageBody};
-use serde_json::json;
 
 impl From<DIDCommMessage> for Message {
     fn from(ffi_msg: DIDCommMessage) -> Self {
-        // Convert the simple string body to a JSON object with "content" field
-        let body = MessageBody::Object(json!({
-            "content": ffi_msg.body
-        }));
+        // Parse the body - it could be JSON or plain text
+        let body = if ffi_msg.body.trim().starts_with('{') || ffi_msg.body.trim().starts_with('[') {
+            // Try to parse as JSON
+            match serde_json::from_str::<serde_json::Value>(&ffi_msg.body) {
+                Ok(json_value) => MessageBody::Object(json_value),
+                Err(_) => MessageBody::String(ffi_msg.body), // Fall back to string if invalid JSON
+            }
+        } else {
+            MessageBody::String(ffi_msg.body)
+        };
         
         Message {
             id: ffi_msg.id,
@@ -27,15 +32,12 @@ impl From<DIDCommMessage> for Message {
 
 impl From<Message> for DIDCommMessage {
     fn from(core_msg: Message) -> Self {
-        // Extract the body content
+        // Convert body to string representation
         let body = match &core_msg.body {
             MessageBody::String(s) => s.clone(),
             MessageBody::Object(obj) => {
-                // Try to extract "content" field, otherwise convert to string
-                obj.get("content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string()
+                // Serialize the entire JSON object
+                serde_json::to_string(obj).unwrap_or_else(|_| "{}".to_string())
             }
         };
         
