@@ -196,7 +196,7 @@ where
     /// Convert core Message to DIDComm Message
     fn message_to_didcomm(&self, msg: &Message) -> DIDCommMessage {
         let body = match &msg.body {
-            MessageBody::String(s) => json!({"content": s}),
+            MessageBody::String(s) => json!(s),
             MessageBody::Object(obj) => obj.clone(),
         };
         
@@ -221,8 +221,9 @@ where
     
     /// Convert DIDComm Message to core Message
     fn didcomm_to_message(&self, msg: DIDCommMessage) -> CoreResult<Message> {
-        let body = if let Some(content) = msg.body.get("content").and_then(|v| v.as_str()) {
-            MessageBody::String(content.to_string())
+        // If body is a string value, extract it. Otherwise keep as object
+        let body = if msg.body.is_string() {
+            MessageBody::String(msg.body.as_str().unwrap_or("").to_string())
         } else {
             MessageBody::Object(msg.body)
         };
