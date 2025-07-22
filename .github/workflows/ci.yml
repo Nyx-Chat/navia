@@ -15,7 +15,7 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Setup JDK
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
@@ -53,7 +53,7 @@ jobs:
         ./gradlew :navia:testReleaseUnitTest
     
     - name: Upload AAR artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: navia-release-aar
         path: android/navia/build/outputs/aar/navia-release.aar
