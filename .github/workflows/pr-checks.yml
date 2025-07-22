@@ -1,0 +1,126 @@
+name: PR Checks
+
+on:
+  pull_request:
+    paths:
+      - 'rust/**'
+      - '.github/workflows/rust-*.yml'
+      - '.github/workflows/pr-checks.yml'
+
+jobs:
+  check-commits:
+    name: Check Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check commit messages
+        run: |
+          # Get all commits in this PR
+          COMMITS=$(git log --format="%H %s" origin/${{ github.base_ref }}..HEAD)
+          
+          # Check each commit message
+          echo "$COMMITS" | while read -r commit; do
+            hash=$(echo "$commit" | cut -d' ' -f1)
+            message=$(echo "$commit" | cut -d' ' -f2-)
+            
+            # Check for conventional commit format
+            if ! echo "$message" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|build|ci|revert)(\(.+\))?: .+'; then
+              echo "Error: Commit $hash does not follow conventional commit format"
+              echo "Message: $message"
+              echo "Expected format: type(scope): description"
+              exit 1
+            fi
+          done
+
+  check-size:
+    name: Check PR Size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check PR size
+        run: |
+          # Count changed lines
+          LINES_ADDED=$(git diff --numstat origin/${{ github.base_ref }}...HEAD | awk '{sum += $1} END {print sum}')
+          LINES_REMOVED=$(git diff --numstat origin/${{ github.base_ref }}...HEAD | awk '{sum += $2} END {print sum}')
+          TOTAL_CHANGES=$((LINES_ADDED + LINES_REMOVED))
+          
+          echo "Lines added: $LINES_ADDED"
+          echo "Lines removed: $LINES_REMOVED"
+          echo "Total changes: $TOTAL_CHANGES"
+          
+          # Warn if PR is too large
+          if [ $TOTAL_CHANGES -gt 1000 ]; then
+            echo "::warning::This PR changes $TOTAL_CHANGES lines. Consider breaking it into smaller PRs."
+          fi
+
+  check-dependencies:
+    name: Check Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for new dependencies
+        run: |
+          cd rust/navia-core
+          
+          # Check if Cargo.lock changed
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "Cargo.lock"; then
+            echo "Dependencies changed. Running additional checks..."
+            
+            # Install cargo-license
+            cargo install cargo-license
+            
+            # Check licenses
+            cargo license --json > licenses.json
+            
+            # Check for problematic licenses
+            if cat licenses.json | jq -r '.[].license' | grep -E "(GPL|AGPL|CC-BY-NC)" | grep -v "MIT/Apache-2.0"; then
+              echo "::error::Found dependencies with potentially incompatible licenses"
+              cat licenses.json | jq -r '.[] | select(.license | test("GPL|AGPL|CC-BY-NC")) | "\(.name) - \(.license)"'
+              exit 1
+            fi
+          fi
+
+  check-unsafe:
+    name: Check Unsafe Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for unsafe code
+        run: |
+          cd rust/navia-core
+          
+          # Count unsafe blocks
+          UNSAFE_COUNT=$(grep -r "unsafe" --include="*.rs" src/ | wc -l)
+          
+          if [ $UNSAFE_COUNT -gt 0 ]; then
+            echo "::warning::Found $UNSAFE_COUNT uses of 'unsafe' keyword"
+            echo "Unsafe code locations:"
+            grep -rn "unsafe" --include="*.rs" src/
+          fi
+
+  check-todos:
+    name: Check TODOs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for TODOs
+        run: |
+          cd rust/navia-core
+          
+          # Find TODOs in code
+          TODO_COUNT=$(grep -rE "(TODO|FIXME|HACK|XXX)" --include="*.rs" src/ | wc -l)
+          
+          if [ $TODO_COUNT -gt 0 ]; then
+            echo "::warning::Found $TODO_COUNT TODO/FIXME/HACK comments"
+            echo "Please address these before merging:"
+            grep -rnE "(TODO|FIXME|HACK|XXX)" --include="*.rs" src/
+          fi

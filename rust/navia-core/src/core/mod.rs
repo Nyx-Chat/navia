@@ -6,6 +6,12 @@
 
 pub mod didcomm;
 pub mod storage;
+pub mod validation;
+pub mod rate_limit;
+pub mod audit;
+pub mod health;
+pub mod config;
+pub mod metrics;
 
 // Re-export commonly used types
 pub use didcomm::handler::DidcommMessaging;

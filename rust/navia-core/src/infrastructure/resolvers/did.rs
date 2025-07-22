@@ -35,6 +35,7 @@ impl DIDResolver for AskarDIDResolver {
             .resolve(did)
             .await
             .map_err(|err| Error::new(ErrorKind::DIDNotResolved, err))?;
+        
         let resolved_doc = response.doc.clone();
         let base = unsafe { DID::new_unchecked(did.as_bytes()) };
 

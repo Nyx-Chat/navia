@@ -16,3 +16,5 @@ ssi-dids-core = "0.1.2"
 anyhow = "1.0.94"
 thiserror = "2.0.6"
 tokio = { version = "1.41.0", features = ["rt", "rt-multi-thread", "macros"] }
+tempfile = "3.8"
+zeroize = { version = "1.7", features = ["derive"] }

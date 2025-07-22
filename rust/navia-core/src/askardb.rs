@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{NaviaResult, NaviaError, StorageError, SerializationError};
 use askar_storage::entry::{Entry, EntryKind, EntryOperation};
 use askar_storage::sqlite::{SqliteBackend, SqliteStoreOptions};
 use askar_storage::{Backend, BackendSession, PassKey, StoreKeyMethod};
@@ -14,44 +14,63 @@ impl AskarDB {
         Self { backend }
     }
 
-    pub async fn provision(path: &str, key: PassKey<'_>) -> Result<Self> {
+    pub async fn provision(path: &str, key: PassKey<'_>) -> NaviaResult<Self> {
         SqliteStoreOptions::from_path(path)
             .provision(StoreKeyMethod::RawKey, key, None, false)
             .await
             .map(Self::new)
-            .map_err(|err| err.into())
+            .map_err(|err| NaviaError::Storage(StorageError::ConnectionFailed {
+                details: format!("askar: {}", err),
+            }))
     }
 
-    pub async fn open(path: &str, key: PassKey<'_>) -> Result<Self> {
+    pub async fn open(path: &str, key: PassKey<'_>) -> NaviaResult<Self> {
         SqliteStoreOptions::from_path(path)
             .open(Some(StoreKeyMethod::RawKey), key, None)
             .await
             .map(Self::new)
-            .map_err(|err| err.into())
+            .map_err(|err| NaviaError::Storage(StorageError::ConnectionFailed {
+                details: format!("askar: {}", err),
+            }))
     }
 
-    pub async fn get_entry(&self, category: &str, name: &str) -> Result<Option<Entry>> {
+    pub async fn get_entry(&self, category: &str, name: &str) -> NaviaResult<Option<Entry>> {
         self.backend
-            .session(None, false)?
+            .session(None, false)
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "create_session".to_string(),
+                details: err.to_string(),
+            }))?
             .fetch(EntryKind::Item, category, name, false)
             .await
-            .map_err(|err| err.into())
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "fetch_entry".to_string(),
+                details: err.to_string(),
+            }))
     }
 
-    pub async fn get<T>(&self, category: &str, name: &str) -> Result<Option<T>>
+    pub async fn get<T>(&self, category: &str, name: &str) -> NaviaResult<Option<T>>
     where
         for<'a> T: Deserialize<'a>,
     {
         self.get_entry(category, name).await.map(|entry_option| {
             entry_option
-                .map(|entry| serde_json::from_slice(entry.value.as_ref()).map_err(|err| err.into()))
+                .map(|entry| serde_json::from_slice(entry.value.as_ref())
+                    .map_err(|err| NaviaError::Serialization(SerializationError::JsonError {
+                        context: format!("deserializing {}/{}", category, name),
+                        details: err.to_string(),
+                    })))
                 .transpose() // Convert Option<Result<T>> to Result<Option<T>>
         })?
     }
 
-    pub async fn insert_entry(&self, category: &str, name: &str, value: &[u8]) -> Result<()> {
+    pub async fn insert_entry(&self, category: &str, name: &str, value: &[u8]) -> NaviaResult<()> {
         self.backend
-            .session(None, false)?
+            .session(None, false)
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "create_session".to_string(),
+                details: err.to_string(),
+            }))?
             .update(
                 EntryKind::Item,
                 EntryOperation::Insert,
@@ -62,17 +81,28 @@ impl AskarDB {
                 None,
             )
             .await
-            .map_err(|err| err.into())
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "insert_entry".to_string(),
+                details: err.to_string(),
+            }))
     }
 
-    pub async fn insert<T: Serialize>(&self, category: &str, name: &str, value: &T) -> Result<()> {
-        self.insert_entry(category, name, &serde_json::to_vec(value)?)
-            .await
+    pub async fn insert<T: Serialize>(&self, category: &str, name: &str, value: &T) -> NaviaResult<()> {
+        let data = serde_json::to_vec(value)
+            .map_err(|err| NaviaError::Serialization(SerializationError::JsonError {
+                context: format!("serializing {}/{}", category, name),
+                details: err.to_string(),
+            }))?;
+        self.insert_entry(category, name, &data).await
     }
 
-    pub async fn update_entry(&self, category: &str, name: &str, value: &[u8]) -> Result<()> {
+    pub async fn update_entry(&self, category: &str, name: &str, value: &[u8]) -> NaviaResult<()> {
         self.backend
-            .session(None, false)?
+            .session(None, false)
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "create_session".to_string(),
+                details: err.to_string(),
+            }))?
             .update(
                 EntryKind::Item,
                 EntryOperation::Replace,
@@ -83,17 +113,28 @@ impl AskarDB {
                 None,
             )
             .await
-            .map_err(|err| err.into())
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "update_entry".to_string(),
+                details: err.to_string(),
+            }))
     }
 
-    pub async fn update<T: Serialize>(&self, category: &str, name: &str, value: &T) -> Result<()> {
-        self.update_entry(category, name, &serde_json::to_vec(value)?)
-            .await
+    pub async fn update<T: Serialize>(&self, category: &str, name: &str, value: &T) -> NaviaResult<()> {
+        let data = serde_json::to_vec(value)
+            .map_err(|err| NaviaError::Serialization(SerializationError::JsonError {
+                context: format!("serializing {}/{}", category, name),
+                details: err.to_string(),
+            }))?;
+        self.update_entry(category, name, &data).await
     }
 
-    pub async fn remove(&self, category: &str, name: &str) -> Result<()> {
+    pub async fn remove(&self, category: &str, name: &str) -> NaviaResult<()> {
         self.backend
-            .session(None, false)?
+            .session(None, false)
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "create_session".to_string(),
+                details: err.to_string(),
+            }))?
             .update(
                 EntryKind::Item,
                 EntryOperation::Remove,
@@ -104,7 +145,10 @@ impl AskarDB {
                 None,
             )
             .await
-            .map_err(|err| err.into())
+            .map_err(|err| NaviaError::Storage(StorageError::OperationFailed {
+                operation: "remove_entry".to_string(),
+                details: err.to_string(),
+            }))
     }
 }
 

@@ -3564,13 +3564,21 @@ dependencies = [
  "async-trait",
  "did-peer",
  "didcomm",
+ "futures",
+ "lazy_static",
+ "log",
+ "once_cell",
+ "parking_lot",
  "serde",
  "serde_json",
  "ssi-core",
  "ssi-dids-core",
+ "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "uniffi",
+ "uuid 1.17.0",
+ "zeroize",
 ]
 
 [[package]]
