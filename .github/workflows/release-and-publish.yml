@@ -1,0 +1,149 @@
+name: Release and Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'rust/navia-core/Cargo.toml'
+
+jobs:
+  release-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from Cargo.toml
+        id: get_version
+        run: |
+          VERSION=$(grep -E '^version = ' rust/navia-core/Cargo.toml | cut -d'"' -f2)
+          echo "VERSION=v$VERSION" >> $GITHUB_OUTPUT
+          echo "RAW_VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: v$VERSION"
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "${{ steps.get_version.outputs.VERSION }}" >/dev/null 2>&1; then
+            echo "EXISTS=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.get_version.outputs.VERSION }} already exists"
+          else
+            echo "EXISTS=false" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.get_version.outputs.VERSION }} does not exist"
+          fi
+
+      - name: Setup Rust
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-workspaces
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: cargo install cargo-workspaces
+
+      - name: Build and test
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        working-directory: rust
+        run: |
+          cargo build --release
+          cargo test --release
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create annotated tag with commit message as annotation
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          git tag -a "${{ steps.get_version.outputs.VERSION }}" -m "$COMMIT_MSG"
+          
+          git push origin "${{ steps.get_version.outputs.VERSION }}"
+          
+          echo "✅ Created and pushed tag ${{ steps.get_version.outputs.VERSION }}"
+
+      - name: Publish to crates.io
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        working-directory: rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # Dry run first to check everything is OK
+          cargo publish -p navia-core --dry-run
+          
+          # Actual publish
+          cargo publish -p navia-core
+          
+          echo "✅ Published navia-core v${{ steps.get_version.outputs.RAW_VERSION }} to crates.io"
+
+      - name: Build release artifacts
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        working-directory: rust
+        run: |
+          # Build for multiple targets if needed
+          cargo build --release --target x86_64-unknown-linux-gnu
+          
+          # Create artifacts directory
+          mkdir -p ../artifacts
+          
+          # Copy built artifacts
+          cp target/x86_64-unknown-linux-gnu/release/libnavia_core.so ../artifacts/ || true
+          cp target/x86_64-unknown-linux-gnu/release/libnavia_core.a ../artifacts/ || true
+          
+          # Generate UniFFI bindings
+          cargo run --bin uniffi-bindgen --features cli -- generate src/navia.udl --language swift -o ../artifacts/swift
+          cargo run --bin uniffi-bindgen --features cli -- generate src/navia.udl --language kotlin -o ../artifacts/kotlin
+          
+          # Create archive
+          cd ../artifacts
+          tar -czf navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz *
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Changes in this release
+            
+            ${{ github.event.head_commit.message }}
+            
+            ### Installation
+            
+            #### Rust/Cargo
+            ```toml
+            [dependencies]
+            navia-core = "${{ steps.get_version.outputs.RAW_VERSION }}"
+            ```
+            
+            #### Swift Package Manager
+            See the Swift bindings in the release artifacts.
+            
+            #### Android/Kotlin
+            See the Kotlin bindings in the release artifacts.
+            
+            ---
+            *This release was automatically created when the version was bumped in Cargo.toml*
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
+          asset_name: navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
+          asset_content_type: application/gzip
