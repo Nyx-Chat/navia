@@ -37,7 +37,7 @@ fn test_health_check_integration() {
     assert!(health["components"].is_array());
 
     let components = health["components"].as_array().unwrap();
-    assert!(components.len() >= 3); // Storage, Cryptography, RateLimiter
+    assert!(components.len() >= 2); // Storage, Cryptography
 
     // Check that all components are healthy
     for component in components {

@@ -5,7 +5,6 @@
 
 use crate::core::audit::{audit_log, SecurityEvent};
 use crate::core::didcomm::message::{Message, MessageBody};
-use crate::core::rate_limit::DID_GENERATION_LIMITER;
 use crate::core::storage::traits::{MessageStorage, SecretStorage};
 use crate::core::validation::{validate_did, validate_uri};
 use crate::error::{
@@ -387,18 +386,6 @@ where
         uri: String,
         routing_keys: Vec<String>,
     ) -> NaviaResult<String> {
-        // Check rate limit
-        if let Err(e) = DID_GENERATION_LIMITER.check_rate_limit("global") {
-            audit_log(
-                SecurityEvent::RateLimitExceeded {
-                    operation: "generate_did".to_string(),
-                    timestamp: SystemTime::now(),
-                },
-                None,
-            );
-            return Err(e);
-        }
-
         // Validate inputs
         validate_uri(&uri)?;
         for routing_key in &routing_keys {
