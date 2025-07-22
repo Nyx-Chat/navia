@@ -9,7 +9,6 @@ pub mod config;
 pub mod didcomm;
 pub mod health;
 pub mod metrics;
-pub mod rate_limit;
 pub mod storage;
 pub mod validation;
 

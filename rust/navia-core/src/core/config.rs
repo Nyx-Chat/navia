@@ -33,12 +33,6 @@ pub struct NaviaConfig {
     /// Logging level
     pub log_level: LogLevel,
 
-    /// Enable rate limiting for DID generation
-    pub enable_rate_limiting: bool,
-
-    /// Maximum DIDs per minute (when rate limiting is enabled)
-    pub max_dids_per_minute: u32,
-
     /// Maximum message size in bytes
     pub max_message_size: usize,
 
@@ -50,8 +44,6 @@ impl Default for NaviaConfig {
     fn default() -> Self {
         Self {
             log_level: LogLevel::default(),
-            enable_rate_limiting: true,
-            max_dids_per_minute: 10,
             max_message_size: 1_048_576, // 1MB
             min_seed_length: 32,
         }
@@ -63,7 +55,6 @@ impl NaviaConfig {
     pub fn development() -> Self {
         Self {
             log_level: LogLevel::Debug,
-            enable_rate_limiting: false,
             min_seed_length: 16,
             ..Default::default()
         }
@@ -73,7 +64,6 @@ impl NaviaConfig {
     pub fn production() -> Self {
         Self {
             log_level: LogLevel::Info,
-            enable_rate_limiting: true,
             min_seed_length: 32,
             ..Default::default()
         }
@@ -108,16 +98,6 @@ impl NaviaConfig {
             return Err(NaviaError::Validation(ValidationError::InvalidSeed {
                 reason: "min_seed_length must be at least 16 bytes".to_string(),
             }));
-        }
-
-        if self.enable_rate_limiting && self.max_dids_per_minute == 0 {
-            return Err(NaviaError::Validation(
-                ValidationError::InvalidMessageFormat {
-                    details:
-                        "max_dids_per_minute must be greater than 0 when rate limiting is enabled"
-                            .to_string(),
-                },
-            ));
         }
 
         Ok(())
@@ -158,14 +138,14 @@ mod tests {
     fn test_development_config() {
         let config = NaviaConfig::development();
         assert_eq!(config.log_level, LogLevel::Debug);
-        assert!(!config.enable_rate_limiting);
+        assert_eq!(config.min_seed_length, 16);
     }
 
     #[test]
     fn test_production_config() {
         let config = NaviaConfig::production();
         assert_eq!(config.log_level, LogLevel::Info);
-        assert!(config.enable_rate_limiting);
+        // Production config has stricter requirements
         assert_eq!(config.min_seed_length, 32);
     }
 

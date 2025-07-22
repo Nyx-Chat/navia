@@ -73,9 +73,6 @@ where
         // Check cryptographic operations
         components.push(self.check_crypto_health().await);
 
-        // Check rate limiter
-        components.push(self.check_rate_limiter_health());
-
         // Determine overall status
         let overall_status = if components
             .iter()
@@ -194,31 +191,6 @@ where
                 },
                 check_duration: start.elapsed(),
                 details: None,
-            },
-        }
-    }
-
-    /// Checks rate limiter status
-    fn check_rate_limiter_health(&self) -> ComponentHealth {
-        let start = Instant::now();
-
-        // Check if we can perform at least one operation
-        use crate::core::rate_limit::DID_GENERATION_LIMITER;
-
-        match DID_GENERATION_LIMITER.check_rate_limit("__health_check__") {
-            Ok(_) => ComponentHealth {
-                name: "RateLimiter".to_string(),
-                status: HealthStatus::Healthy,
-                check_duration: start.elapsed(),
-                details: Some("Rate limit not exceeded".to_string()),
-            },
-            Err(_) => ComponentHealth {
-                name: "RateLimiter".to_string(),
-                status: HealthStatus::Degraded {
-                    reason: "Rate limit exceeded".to_string(),
-                },
-                check_duration: start.elapsed(),
-                details: Some("DID generation may be temporarily throttled".to_string()),
             },
         }
     }
