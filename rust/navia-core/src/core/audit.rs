@@ -89,11 +89,17 @@ pub struct InMemoryAuditLogger {
     entries: Mutex<Vec<AuditEntry>>,
 }
 
-impl InMemoryAuditLogger {
-    pub fn new() -> Self {
+impl Default for InMemoryAuditLogger {
+    fn default() -> Self {
         Self {
             entries: Mutex::new(Vec::new()),
         }
+    }
+}
+
+impl InMemoryAuditLogger {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn get_entries(&self) -> Vec<AuditEntry> {
@@ -178,9 +184,9 @@ pub fn audit_log(event: SecurityEvent, context: Option<String>) {
 /// Create audit context from common request information
 pub fn create_context(user_agent: Option<&str>, ip: Option<&str>) -> Option<String> {
     match (user_agent, ip) {
-        (Some(ua), Some(ip)) => Some(format!("UA: {}, IP: {}", ua, ip)),
-        (Some(ua), None) => Some(format!("UA: {}", ua)),
-        (None, Some(ip)) => Some(format!("IP: {}", ip)),
+        (Some(ua), Some(ip)) => Some(format!("UA: {ua}, IP: {ip}")),
+        (Some(ua), None) => Some(format!("UA: {ua}")),
+        (None, Some(ip)) => Some(format!("IP: {ip}")),
         (None, None) => None,
     }
 }

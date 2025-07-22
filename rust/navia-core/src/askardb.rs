@@ -20,7 +20,7 @@ impl AskarDB {
             .map(Self::new)
             .map_err(|err| {
                 NaviaError::Storage(StorageError::ConnectionFailed {
-                    details: format!("askar: {}", err),
+                    details: format!("askar: {err}"),
                 })
             })
     }
@@ -32,7 +32,7 @@ impl AskarDB {
             .map(Self::new)
             .map_err(|err| {
                 NaviaError::Storage(StorageError::ConnectionFailed {
-                    details: format!("askar: {}", err),
+                    details: format!("askar: {err}"),
                 })
             })
     }
@@ -65,7 +65,7 @@ impl AskarDB {
                 .map(|entry| {
                     serde_json::from_slice(entry.value.as_ref()).map_err(|err| {
                         NaviaError::Serialization(SerializationError::JsonError {
-                            context: format!("deserializing {}/{}", category, name),
+                            context: format!("deserializing {category}/{name}"),
                             details: err.to_string(),
                         })
                     })
@@ -109,7 +109,7 @@ impl AskarDB {
     ) -> NaviaResult<()> {
         let data = serde_json::to_vec(value).map_err(|err| {
             NaviaError::Serialization(SerializationError::JsonError {
-                context: format!("serializing {}/{}", category, name),
+                context: format!("serializing {category}/{name}"),
                 details: err.to_string(),
             })
         })?;
@@ -151,7 +151,7 @@ impl AskarDB {
     ) -> NaviaResult<()> {
         let data = serde_json::to_vec(value).map_err(|err| {
             NaviaError::Serialization(SerializationError::JsonError {
-                context: format!("serializing {}/{}", category, name),
+                context: format!("serializing {category}/{name}"),
                 details: err.to_string(),
             })
         })?;

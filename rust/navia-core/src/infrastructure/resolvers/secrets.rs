@@ -47,7 +47,7 @@ where
         let mut found_secrets = Vec::new();
 
         for &secret_id in secret_ids {
-            if let Some(_) = self.get_secret(secret_id).await? {
+            if self.get_secret(secret_id).await?.is_some() {
                 found_secrets.push(secret_id);
             }
         }

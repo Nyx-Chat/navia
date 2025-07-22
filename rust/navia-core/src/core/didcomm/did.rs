@@ -42,9 +42,9 @@ use serde_json::json;
 /// # Arguments
 ///
 /// * `uri` - The service endpoint URI where this DID can receive DIDComm messages.
-///           Should be a valid HTTPS URL or WebSocket endpoint.
+///   Should be a valid HTTPS URL or WebSocket endpoint.
 /// * `routing_keys` - Optional list of mediator DIDs for message forwarding.
-///                    Use empty vec if direct messaging without mediators.
+///   Use empty vec if direct messaging without mediators.
 ///
 /// # Returns
 ///
@@ -122,7 +122,7 @@ pub fn generate_peer_did(
         .map(|key| {
             kid += 1;
             Secret {
-                id: format!("{}#key-{}", did, kid),
+                id: format!("{did}#key-{kid}"),
                 type_: SecretType::JsonWebKey2020,
                 secret_material: SecretMaterial::JWK {
                     private_key_jwk: match key.curve.as_ref() {

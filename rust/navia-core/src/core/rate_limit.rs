@@ -47,7 +47,7 @@ impl RateLimiter {
         let now = Instant::now();
 
         // Get or create the operation list for this key
-        let ops = operations.entry(key.to_string()).or_insert_with(Vec::new);
+        let ops = operations.entry(key.to_string()).or_default();
 
         // Remove operations outside the time window
         ops.retain(|&instant| now.duration_since(instant) < self.window);

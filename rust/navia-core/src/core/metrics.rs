@@ -35,14 +35,20 @@ pub struct MetricsCollector {
     enabled: Arc<RwLock<bool>>,
 }
 
-impl MetricsCollector {
-    /// Create a new metrics collector
-    pub fn new() -> Self {
+impl Default for MetricsCollector {
+    fn default() -> Self {
         Self {
             entries: Arc::new(RwLock::new(VecDeque::with_capacity(MAX_ENTRIES))),
             file_path: Arc::new(RwLock::new(None)),
             enabled: Arc::new(RwLock::new(true)),
         }
+    }
+}
+
+impl MetricsCollector {
+    /// Create a new metrics collector
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Initialize with a log file path
@@ -111,7 +117,7 @@ impl MetricsCollector {
 
         let entry = MetricEntry {
             timestamp: SystemTime::now(),
-            name: format!("error.{}", operation),
+            name: format!("error.{operation}"),
             value: MetricValue::Error {
                 message: error.to_string(),
                 operation: operation.to_string(),
@@ -223,7 +229,7 @@ impl MetricsCollector {
         let entries = self.entries.read();
         let vec: Vec<MetricEntry> = entries.iter().cloned().collect();
         serde_json::to_string_pretty(&vec)
-            .map_err(|e| NaviaError::External(format!("Failed to export metrics: {}", e)))
+            .map_err(|e| NaviaError::External(format!("Failed to export metrics: {e}")))
     }
 
     /// Clear all metrics
@@ -252,7 +258,7 @@ impl MetricsCollector {
         // Write to file
         if let Some(path) = &*self.file_path.read() {
             if let Err(e) = self.append_to_file(path, &entry) {
-                log::error!("Failed to write metric to file: {}", e);
+                log::error!("Failed to write metric to file: {e}");
             }
         }
     }
@@ -262,27 +268,27 @@ impl MetricsCollector {
             .create(true)
             .append(true)
             .open(path)
-            .map_err(|e| NaviaError::External(format!("Failed to open metrics file: {}", e)))?;
+            .map_err(|e| NaviaError::External(format!("Failed to open metrics file: {e}")))?;
 
         let line = serde_json::to_string(entry)
-            .map_err(|e| NaviaError::External(format!("Failed to serialize metric: {}", e)))?;
+            .map_err(|e| NaviaError::External(format!("Failed to serialize metric: {e}")))?;
 
-        writeln!(file, "{}", line)
-            .map_err(|e| NaviaError::External(format!("Failed to write metric: {}", e)))?;
+        writeln!(file, "{line}")
+            .map_err(|e| NaviaError::External(format!("Failed to write metric: {e}")))?;
 
         Ok(())
     }
 
     fn load_from_file(&self, path: &Path) -> NaviaResult<()> {
         let file = File::open(path)
-            .map_err(|e| NaviaError::External(format!("Failed to open metrics file: {}", e)))?;
+            .map_err(|e| NaviaError::External(format!("Failed to open metrics file: {e}")))?;
         let reader = BufReader::new(file);
 
         let mut entries = self.entries.write();
         entries.clear();
 
         // Read all lines and keep only the last MAX_ENTRIES
-        let lines: Vec<String> = reader.lines().filter_map(|line| line.ok()).collect();
+        let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
         let start_idx = if lines.len() > MAX_ENTRIES {
             lines.len() - MAX_ENTRIES

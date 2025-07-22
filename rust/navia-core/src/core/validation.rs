@@ -50,7 +50,7 @@ pub fn validate_did(did: &str) -> NaviaResult<()> {
     if did.len() > MAX_DID_LENGTH {
         return Err(ValidationError::InvalidDid {
             value: did.to_string(),
-            reason: format!("exceeds maximum length of {} characters", MAX_DID_LENGTH),
+            reason: format!("exceeds maximum length of {MAX_DID_LENGTH} characters"),
         }
         .into());
     }
@@ -113,7 +113,7 @@ pub fn validate_uri(uri: &str) -> NaviaResult<()> {
     if uri.len() > MAX_URI_LENGTH {
         return Err(ValidationError::InvalidUri {
             value: uri.to_string(),
-            reason: format!("exceeds maximum length of {} characters", MAX_URI_LENGTH),
+            reason: format!("exceeds maximum length of {MAX_URI_LENGTH} characters"),
         }
         .into());
     }
@@ -168,14 +168,14 @@ pub fn validate_seed(seed: &[u8]) -> NaviaResult<()> {
 
     if seed.len() < min_length {
         return Err(ValidationError::InvalidSeed {
-            reason: format!("Seed must be at least {} bytes", min_length),
+            reason: format!("Seed must be at least {min_length} bytes"),
         }
         .into());
     }
 
     if seed.len() > MAX_SEED_LENGTH {
         return Err(ValidationError::InvalidSeed {
-            reason: format!("Seed exceeds maximum length of {} bytes", MAX_SEED_LENGTH),
+            reason: format!("Seed exceeds maximum length of {MAX_SEED_LENGTH} bytes"),
         }
         .into());
     }

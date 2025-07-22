@@ -149,7 +149,7 @@ where
                     Err(e) => ComponentHealth {
                         name: "Storage".to_string(),
                         status: HealthStatus::Unhealthy {
-                            reason: format!("Read failed: {}", e),
+                            reason: format!("Read failed: {e}"),
                         },
                         check_duration: start.elapsed(),
                         details: None,
@@ -159,7 +159,7 @@ where
             Err(e) => ComponentHealth {
                 name: "Storage".to_string(),
                 status: HealthStatus::Unhealthy {
-                    reason: format!("Write failed: {}", e),
+                    reason: format!("Write failed: {e}"),
                 },
                 check_duration: start.elapsed(),
                 details: None,
@@ -190,7 +190,7 @@ where
             Err(e) => ComponentHealth {
                 name: "Cryptography".to_string(),
                 status: HealthStatus::Unhealthy {
-                    reason: format!("Key generation failed: {}", e),
+                    reason: format!("Key generation failed: {e}"),
                 },
                 check_duration: start.elapsed(),
                 details: None,

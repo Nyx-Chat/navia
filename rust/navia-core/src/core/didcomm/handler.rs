@@ -433,7 +433,7 @@ where
             .map(|key| {
                 kid += 1;
                 Secret {
-                    id: format!("{}#key-{}", did, kid),
+                    id: format!("{did}#key-{kid}"),
                     type_: SecretType::JsonWebKey2020,
                     secret_material: SecretMaterial::JWK {
                         private_key_jwk: match key.curve.as_ref() {

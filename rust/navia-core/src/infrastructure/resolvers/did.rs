@@ -82,7 +82,7 @@ fn map_service(sc: &ResolvedService) -> Result<Service> {
         Some(endpoints) => match endpoints {
             OneOrMany::One(ep) if is_didcomm => Ok(Service {
                 id,
-                service_endpoint: endpoint_to_didcomm_messaging_service(&ep)?,
+                service_endpoint: endpoint_to_didcomm_messaging_service(ep)?,
             }),
             OneOrMany::Many(eps) if is_didcomm && !eps.is_empty() => Ok(Service {
                 id,

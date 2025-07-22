@@ -422,9 +422,9 @@ impl DidComInterface {
     /// # Arguments
     ///
     /// * `uri` - Service endpoint URI where this DID can receive messages
-    ///           (e.g., "https://example.com/didcomm")
+    ///   (e.g., "https://example.com/didcomm")
     /// * `routing_keys` - Optional mediator DIDs for message forwarding.
-    ///                    Use empty vector for direct messaging.
+    ///   Use empty vector for direct messaging.
     ///
     /// # Returns
     ///

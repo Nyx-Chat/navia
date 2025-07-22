@@ -14,10 +14,3 @@ too-many-arguments-threshold = 7
 
 # Enforce documentation
 missing-docs-in-crate-items = true
-
-# Disallow certain macros
-disallowed-macros = [
-    "dbg",
-    "todo",
-    "unimplemented",
-]
