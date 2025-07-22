@@ -1,0 +1,21 @@
+# Security audit configuration for navia
+# Last updated: 2025-07-22
+
+[advisories]
+# List of security advisories to ignore
+ignore = [
+    # Critical vulnerabilities from askar-crypto 0.2.5 (via didcomm 0.4.1)
+    "RUSTSEC-2024-0344", # curve25519-dalek timing vulnerability
+    "RUSTSEC-2022-0093", # ed25519-dalek double public key signing attack
+    
+    # Warnings for unmaintained/renamed crates
+    "RUSTSEC-2023-0037", # xsalsa20poly1305 renamed to crypto_secretbox
+    
+    # Other transitive dependency issues with no fixes
+    "RUSTSEC-2022-0040", # owning_ref soundness issues
+    "RUSTSEC-2023-0071", # rsa Marvin attack
+    "RUSTSEC-2024-0388", # derivative unmaintained
+    "RUSTSEC-2024-0436", # paste unmaintained
+    "RUSTSEC-2024-0370", # proc-macro-error unmaintained
+    "RUSTSEC-2021-0127", # serde_cbor unmaintained
+]
