@@ -1,8 +1,8 @@
 //! Configuration management for the navia library
-//! 
+//!
 //! Provides runtime configuration for core library behavior.
 
-use crate::error::{NaviaResult, NaviaError, ValidationError};
+use crate::error::{NaviaError, NaviaResult, ValidationError};
 use serde::{Deserialize, Serialize};
 
 /// Logging level configuration
@@ -21,7 +21,7 @@ impl Default for LogLevel {
     fn default() -> Self {
         #[cfg(debug_assertions)]
         return LogLevel::Debug;
-        
+
         #[cfg(not(debug_assertions))]
         return LogLevel::Info;
     }
@@ -32,16 +32,16 @@ impl Default for LogLevel {
 pub struct NaviaConfig {
     /// Logging level
     pub log_level: LogLevel,
-    
+
     /// Enable rate limiting for DID generation
     pub enable_rate_limiting: bool,
-    
+
     /// Maximum DIDs per minute (when rate limiting is enabled)
     pub max_dids_per_minute: u32,
-    
+
     /// Maximum message size in bytes
     pub max_message_size: usize,
-    
+
     /// Minimum seed length in bytes for security
     pub min_seed_length: usize,
 }
@@ -68,7 +68,7 @@ impl NaviaConfig {
             ..Default::default()
         }
     }
-    
+
     /// Create a production configuration
     pub fn production() -> Self {
         Self {
@@ -78,7 +78,7 @@ impl NaviaConfig {
             ..Default::default()
         }
     }
-    
+
     /// Load configuration from environment
     pub fn from_env() -> Self {
         match std::env::var("NAVIA_ENV").as_deref() {
@@ -87,47 +87,55 @@ impl NaviaConfig {
             _ => {
                 #[cfg(debug_assertions)]
                 return Self::development();
-                
+
                 #[cfg(not(debug_assertions))]
                 return Self::production();
             }
         }
     }
-    
+
     /// Validate configuration values
     pub fn validate(&self) -> NaviaResult<()> {
         if self.max_message_size == 0 {
-            return Err(NaviaError::Validation(ValidationError::InvalidMessageFormat {
-                details: "max_message_size must be greater than 0".to_string(),
-            }));
+            return Err(NaviaError::Validation(
+                ValidationError::InvalidMessageFormat {
+                    details: "max_message_size must be greater than 0".to_string(),
+                },
+            ));
         }
-        
+
         if self.min_seed_length < 16 {
             return Err(NaviaError::Validation(ValidationError::InvalidSeed {
                 reason: "min_seed_length must be at least 16 bytes".to_string(),
             }));
         }
-        
+
         if self.enable_rate_limiting && self.max_dids_per_minute == 0 {
-            return Err(NaviaError::Validation(ValidationError::InvalidMessageFormat {
-                details: "max_dids_per_minute must be greater than 0 when rate limiting is enabled".to_string(),
-            }));
+            return Err(NaviaError::Validation(
+                ValidationError::InvalidMessageFormat {
+                    details:
+                        "max_dids_per_minute must be greater than 0 when rate limiting is enabled"
+                            .to_string(),
+                },
+            ));
         }
-        
+
         Ok(())
     }
 }
 
 /// Global configuration instance
-static CONFIG: once_cell::sync::OnceCell<parking_lot::RwLock<NaviaConfig>> = once_cell::sync::OnceCell::new();
+static CONFIG: once_cell::sync::OnceCell<parking_lot::RwLock<NaviaConfig>> =
+    once_cell::sync::OnceCell::new();
 
 /// Initialize the global configuration
 pub fn init_config(config: NaviaConfig) -> NaviaResult<()> {
     config.validate()?;
-    
-    CONFIG.set(parking_lot::RwLock::new(config))
+
+    CONFIG
+        .set(parking_lot::RwLock::new(config))
         .map_err(|_| NaviaError::External("Configuration already initialized".to_string()))?;
-    
+
     Ok(())
 }
 
@@ -139,20 +147,20 @@ pub fn get_config() -> &'static parking_lot::RwLock<NaviaConfig> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_config() {
         let config = NaviaConfig::default();
         assert!(config.validate().is_ok());
     }
-    
+
     #[test]
     fn test_development_config() {
         let config = NaviaConfig::development();
         assert_eq!(config.log_level, LogLevel::Debug);
         assert!(!config.enable_rate_limiting);
     }
-    
+
     #[test]
     fn test_production_config() {
         let config = NaviaConfig::production();
@@ -160,14 +168,14 @@ mod tests {
         assert!(config.enable_rate_limiting);
         assert_eq!(config.min_seed_length, 32);
     }
-    
+
     #[test]
     fn test_config_validation() {
         let mut config = NaviaConfig::default();
-        
+
         config.max_message_size = 0;
         assert!(config.validate().is_err());
-        
+
         config.max_message_size = 1024;
         config.min_seed_length = 8;
         assert!(config.validate().is_err());

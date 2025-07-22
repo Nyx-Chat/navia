@@ -1,5 +1,5 @@
 //! Secrets resolver implementation using Askar
-//! 
+//!
 //! Resolves secrets stored in the Askar database.
 
 use crate::core::storage::traits::SecretStorage;

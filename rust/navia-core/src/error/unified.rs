@@ -1,11 +1,14 @@
 //! Unified error type that combines all specific errors
-//! 
+//!
 //! Since we're building from scratch, we can use a clean error design
 //! without legacy compatibility concerns.
 
-use thiserror::Error;
-use super::specific::{PackingError, UnpackingError, DidError, StorageError, ValidationError, ResolutionError, SerializationError};
+use super::specific::{
+    DidError, PackingError, ResolutionError, SerializationError, StorageError, UnpackingError,
+    ValidationError,
+};
 use crate::core::metrics::METRICS;
+use thiserror::Error;
 
 /// Unified error type for all navia-core operations
 #[derive(Debug, Clone, Error)]
@@ -13,31 +16,31 @@ pub enum NaviaError {
     /// Errors during message packing (encryption)
     #[error(transparent)]
     Packing(PackingError),
-    
+
     /// Errors during message unpacking (decryption)
     #[error(transparent)]
     Unpacking(UnpackingError),
-    
+
     /// Errors during DID operations
     #[error(transparent)]
     Did(DidError),
-    
+
     /// Errors during storage operations
     #[error(transparent)]
     Storage(StorageError),
-    
+
     /// Errors during validation
     #[error(transparent)]
     Validation(ValidationError),
-    
+
     /// Errors during resolution operations
     #[error(transparent)]
     Resolution(#[from] ResolutionError),
-    
+
     /// Errors during serialization/deserialization
     #[error(transparent)]
     Serialization(#[from] SerializationError),
-    
+
     /// Errors from external libraries
     #[error("External error: {0}")]
     External(String),
@@ -85,7 +88,6 @@ impl From<ValidationError> for NaviaError {
         error
     }
 }
-
 
 // Convenience conversions from common external errors
 impl From<serde_json::Error> for NaviaError {

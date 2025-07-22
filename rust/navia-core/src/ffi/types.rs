@@ -1,24 +1,24 @@
 //! FFI type definitions for UniFFI
-//! 
+//!
 //! These types are exposed through the FFI boundary and are
 //! designed to be simple DTOs that map well to Kotlin/Swift.
 
 /// DIDComm message structure for cross-language FFI communication.
-/// 
+///
 /// This type represents a DIDComm v2 message in a format that can be
 /// easily passed between Rust and Kotlin/Swift through UniFFI.
-/// 
+///
 /// # Fields
-/// 
+///
 /// * `id` - Unique message identifier. Should be a UUID or similar unique string.
 /// * `msg_type` - Message type URI indicating the protocol and message type
 ///   (e.g., "https://didcomm.org/basicmessage/2.0/message")
 /// * `body` - Message body as a JSON string. The structure depends on the protocol.
 /// * `from` - Optional sender DID. Required for authenticated messages.
 /// * `to` - List of recipient DIDs. Must contain at least one recipient for packing.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```ignore
 /// # use crate::ffi::DIDCommMessage;
 /// // Basic message
@@ -29,7 +29,7 @@
 ///     from: Some("did:peer:sender123".to_string()),
 ///     to: vec!["did:peer:recipient456".to_string()],
 /// };
-/// 
+///
 /// // Message with JSON body
 /// let message_with_content = DIDCommMessage {
 ///     id: "msg-001".to_string(),
@@ -54,18 +54,18 @@ pub struct DIDCommMessage {
 }
 
 /// Key-value pair for batch database operations.
-/// 
+///
 /// Used for efficient batch insertions and retrievals to minimize
 /// database transaction overhead.
-/// 
+///
 /// # Fields
-/// 
+///
 /// * `key` - Unique identifier within a category
 /// * `value` - String value to store (can be JSON)
 /// * `metadata` - Reserved for future use (e.g., timestamps, tags)
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```ignore
 /// # use crate::ffi::KeyValue;
 /// // Simple key-value
@@ -74,7 +74,7 @@ pub struct DIDCommMessage {
 ///     value: "dark".to_string(),
 ///     metadata: None,
 /// };
-/// 
+///
 /// // JSON value with metadata
 /// let contact = KeyValue {
 ///     key: "alice".to_string(),

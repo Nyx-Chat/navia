@@ -1,5 +1,5 @@
 //! DID resolver implementation using Askar
-//! 
+//!
 //! Resolves DIDs using the Affinidi DID resolver cache.
 
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
@@ -35,7 +35,7 @@ impl DIDResolver for AskarDIDResolver {
             .resolve(did)
             .await
             .map_err(|err| Error::new(ErrorKind::DIDNotResolved, err))?;
-        
+
         let resolved_doc = response.doc.clone();
         let base = unsafe { DID::new_unchecked(did.as_bytes()) };
 
@@ -81,20 +81,20 @@ fn map_service(sc: &ResolvedService) -> Result<Service> {
     match &sc.service_endpoint {
         Some(endpoints) => match endpoints {
             OneOrMany::One(ep) if is_didcomm => Ok(Service {
-                id: id,
+                id,
                 service_endpoint: endpoint_to_didcomm_messaging_service(&ep)?,
             }),
             OneOrMany::Many(eps) if is_didcomm && !eps.is_empty() => Ok(Service {
-                id: id,
+                id,
                 service_endpoint: endpoint_to_didcomm_messaging_service(eps.first().unwrap())?,
             }),
             _ => Ok(Service {
-                id: id,
+                id,
                 service_endpoint: ServiceKind::Other { value: Value::Null },
             }),
         },
         None => Ok(Service {
-            id: id,
+            id,
             service_endpoint: ServiceKind::Other { value: Value::Null },
         }),
     }

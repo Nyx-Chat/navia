@@ -1,5 +1,5 @@
 //! Security audit logging
-//! 
+//!
 //! Provides structured logging for security-sensitive operations
 //! to enable monitoring, compliance, and forensic analysis.
 
@@ -11,15 +11,9 @@ use std::time::SystemTime;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SecurityEvent {
     /// Database opened with encryption
-    DatabaseOpened {
-        path: String,
-        timestamp: SystemTime,
-    },
+    DatabaseOpened { path: String, timestamp: SystemTime },
     /// DID generated
-    DidGenerated {
-        did: String,
-        timestamp: SystemTime,
-    },
+    DidGenerated { did: String, timestamp: SystemTime },
     /// Message encrypted
     MessagePacked {
         from: Option<String>,
@@ -85,7 +79,7 @@ pub struct AuditEntry {
 pub trait AuditLogger: Send + Sync {
     /// Log a security event
     fn log(&self, entry: AuditEntry);
-    
+
     /// Flush any buffered logs
     fn flush(&self);
 }
@@ -101,11 +95,11 @@ impl InMemoryAuditLogger {
             entries: Mutex::new(Vec::new()),
         }
     }
-    
+
     pub fn get_entries(&self) -> Vec<AuditEntry> {
         self.entries.lock().unwrap().clone()
     }
-    
+
     pub fn clear(&self) {
         self.entries.lock().unwrap().clear();
     }
@@ -115,7 +109,7 @@ impl AuditLogger for InMemoryAuditLogger {
     fn log(&self, entry: AuditEntry) {
         self.entries.lock().unwrap().push(entry);
     }
-    
+
     fn flush(&self) {
         // No-op for in-memory logger
     }
@@ -126,7 +120,7 @@ impl AuditLogger for Arc<InMemoryAuditLogger> {
     fn log(&self, entry: AuditEntry) {
         (**self).log(entry);
     }
-    
+
     fn flush(&self) {
         (**self).flush();
     }
@@ -147,32 +141,27 @@ impl ConsoleAuditLogger {
 
 impl AuditLogger for ConsoleAuditLogger {
     fn log(&self, entry: AuditEntry) {
-        eprintln!(
-            "{} [AUDIT] {}: {:?}",
-            self.prefix,
-            entry.id,
-            entry.event
-        );
+        eprintln!("{} [AUDIT] {}: {:?}", self.prefix, entry.id, entry.event);
     }
-    
+
     fn flush(&self) {
         // Console output is unbuffered
     }
 }
 
 /// Global audit logger instance
-static AUDIT_LOGGER: once_cell::sync::OnceCell<Arc<dyn AuditLogger>> = 
+static AUDIT_LOGGER: once_cell::sync::OnceCell<Arc<dyn AuditLogger>> =
     once_cell::sync::OnceCell::new();
 
 /// Initialize the global audit logger
-/// 
+///
 /// This should be called once at application startup
 pub fn init_audit_logger(logger: Arc<dyn AuditLogger>) {
     let _ = AUDIT_LOGGER.set(logger);
 }
 
 /// Log a security event
-/// 
+///
 /// If no logger is initialized, events are silently dropped
 pub fn audit_log(event: SecurityEvent, context: Option<String>) {
     if let Some(logger) = AUDIT_LOGGER.get() {
@@ -199,26 +188,26 @@ pub fn create_context(user_agent: Option<&str>, ip: Option<&str>) -> Option<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_in_memory_logger() {
         let logger = InMemoryAuditLogger::new();
-        
+
         let event = SecurityEvent::DidGenerated {
             did: "did:peer:123".to_string(),
             timestamp: SystemTime::now(),
         };
-        
+
         logger.log(AuditEntry {
             id: "test-1".to_string(),
             event,
             context: None,
             thread_id: format!("{:?}", std::thread::current().id()),
         });
-        
+
         let entries = logger.get_entries();
         assert_eq!(entries.len(), 1);
-        
+
         match &entries[0].event {
             SecurityEvent::DidGenerated { did, .. } => {
                 assert_eq!(did, "did:peer:123");
@@ -226,24 +215,24 @@ mod tests {
             _ => panic!("Wrong event type"),
         }
     }
-    
+
     #[test]
     fn test_create_context() {
         assert_eq!(
             create_context(Some("Mozilla/5.0"), Some("192.168.1.1")),
             Some("UA: Mozilla/5.0, IP: 192.168.1.1".to_string())
         );
-        
+
         assert_eq!(
             create_context(Some("Mozilla/5.0"), None),
             Some("UA: Mozilla/5.0".to_string())
         );
-        
+
         assert_eq!(
             create_context(None, Some("192.168.1.1")),
             Some("IP: 192.168.1.1".to_string())
         );
-        
+
         assert_eq!(create_context(None, None), None);
     }
 }

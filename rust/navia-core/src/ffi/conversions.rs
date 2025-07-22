@@ -1,18 +1,18 @@
 //! Type conversions between FFI and core types
-//! 
+//!
 //! This module handles converting between the simple FFI types
 //! exposed through UniFFI and the richer core domain types.
 
-use crate::ffi::types::{DIDCommMessage, KeyValue};
 use crate::core::didcomm::message::{Message, MessageBody};
+use crate::ffi::types::{DIDCommMessage, KeyValue};
 
 /// Converts FFI DIDCommMessage to core Message type.
-/// 
+///
 /// This conversion handles the transformation of the message body:
 /// - If the body looks like JSON (starts with '{' or '['), it attempts to parse it
 /// - If parsing succeeds, stores it as a structured Object
 /// - If parsing fails or it's not JSON, stores it as a plain String
-/// 
+///
 /// This approach provides flexibility for different message formats while
 /// maintaining type safety in the core domain.
 impl From<DIDCommMessage> for Message {
@@ -27,7 +27,7 @@ impl From<DIDCommMessage> for Message {
         } else {
             MessageBody::String(ffi_msg.body)
         };
-        
+
         Message {
             id: ffi_msg.id,
             msg_type: ffi_msg.msg_type,
@@ -40,11 +40,11 @@ impl From<DIDCommMessage> for Message {
 }
 
 /// Converts core Message to FFI DIDCommMessage type.
-/// 
+///
 /// This conversion serializes the message body:
 /// - String bodies are passed through as-is
 /// - Object bodies are serialized to JSON strings
-/// 
+///
 /// The serialization is guaranteed to produce valid JSON for Object variants,
 /// falling back to "{}" in the unlikely event of serialization failure.
 impl From<Message> for DIDCommMessage {
@@ -57,7 +57,7 @@ impl From<Message> for DIDCommMessage {
                 serde_json::to_string(obj).unwrap_or_else(|_| "{}".to_string())
             }
         };
-        
+
         DIDCommMessage {
             id: core_msg.id,
             msg_type: core_msg.msg_type,
@@ -69,12 +69,12 @@ impl From<Message> for DIDCommMessage {
 }
 
 /// Converts FFI KeyValue to a simple tuple for core operations.
-/// 
+///
 /// This strips away the optional metadata field, providing just the
 /// key-value pair needed by core storage operations.
-/// 
+///
 /// # Note
-/// 
+///
 /// The metadata field is intentionally discarded as it's reserved for
 /// future use and not currently processed by the storage layer.
 impl From<KeyValue> for (String, String) {
@@ -84,7 +84,7 @@ impl From<KeyValue> for (String, String) {
 }
 
 /// Converts a key-value tuple to FFI KeyValue type.
-/// 
+///
 /// This is used when returning data from core storage operations,
 /// adding the required metadata field (set to None).
 impl From<(String, String)> for KeyValue {
@@ -98,21 +98,21 @@ impl From<(String, String)> for KeyValue {
 }
 
 /// Helper function to convert optional storage results to KeyValue.
-/// 
+///
 /// This is useful for batch operations where some keys might not exist.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `key` - The key that was queried
 /// * `value` - Optional value from storage
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Some(KeyValue)` if a value was found
 /// * `None` if the key didn't exist in storage
-/// 
+///
 /// # Example
-/// 
+///
 /// ```ignore
 /// let result = storage.get("contacts", "alice").await?;
 /// let kv = optional_tuple_to_keyvalue("alice".to_string(), result);

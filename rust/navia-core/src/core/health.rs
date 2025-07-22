@@ -1,12 +1,12 @@
 //! Health check functionality for monitoring library status
-//! 
+//!
 //! Provides methods to verify that all core components are functioning correctly.
 
 use crate::core::storage::traits::{MessageStorage, SecretStorage};
-use crate::error::{NaviaResult, NaviaError};
+use crate::error::{NaviaError, NaviaResult};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use serde::{Serialize, Deserialize};
 
 /// Health check status for a component
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -77,9 +77,15 @@ where
         components.push(self.check_rate_limiter_health());
 
         // Determine overall status
-        let overall_status = if components.iter().all(|c| matches!(c.status, HealthStatus::Healthy)) {
+        let overall_status = if components
+            .iter()
+            .all(|c| matches!(c.status, HealthStatus::Healthy))
+        {
             HealthStatus::Healthy
-        } else if components.iter().any(|c| matches!(c.status, HealthStatus::Unhealthy { .. })) {
+        } else if components
+            .iter()
+            .any(|c| matches!(c.status, HealthStatus::Unhealthy { .. }))
+        {
             HealthStatus::Unhealthy {
                 reason: "One or more components are unhealthy".to_string(),
             }
@@ -105,14 +111,18 @@ where
         let test_category = "__health__";
 
         // Try to write a test value
-        match self.storage.insert(test_category, test_key, test_value).await {
+        match self
+            .storage
+            .insert(test_category, test_key, test_value)
+            .await
+        {
             Ok(_) => {
                 // Try to read it back
                 match self.storage.get(test_category, test_key).await {
                     Ok(Some(value)) if value == test_value => {
                         // Clean up
                         let _ = self.storage.remove(test_category, test_key).await;
-                        
+
                         ComponentHealth {
                             name: "Storage".to_string(),
                             status: HealthStatus::Healthy,
@@ -160,18 +170,16 @@ where
     /// Checks cryptographic operations
     async fn check_crypto_health(&self) -> ComponentHealth {
         let start = Instant::now();
-        
+
         // Try to generate a test key using did_peer
         use did_peer::{DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys};
-        
-        let keys = vec![
-            DIDPeerCreateKeys::new(
-                DIDPeerKeys::Verification,
-                Some(DIDPeerKeyType::Ed25519),
-                None,
-            ),
-        ];
-        
+
+        let keys = vec![DIDPeerCreateKeys::new(
+            DIDPeerKeys::Verification,
+            Some(DIDPeerKeyType::Ed25519),
+            None,
+        )];
+
         match DIDPeer::create_peer_did(&keys, None) {
             Ok(_) => ComponentHealth {
                 name: "Cryptography".to_string(),
@@ -193,10 +201,10 @@ where
     /// Checks rate limiter status
     fn check_rate_limiter_health(&self) -> ComponentHealth {
         let start = Instant::now();
-        
+
         // Check if we can perform at least one operation
         use crate::core::rate_limit::DID_GENERATION_LIMITER;
-        
+
         match DID_GENERATION_LIMITER.check_rate_limit("__health_check__") {
             Ok(_) => ComponentHealth {
                 name: "RateLimiter".to_string(),
@@ -219,7 +227,7 @@ where
     pub async fn quick_check(&self) -> NaviaResult<bool> {
         let test_key = "__quick_health_check__";
         let test_category = "__health__";
-        
+
         // Just try to read from storage (non-existent key is fine)
         match self.storage.get(test_category, test_key).await {
             Ok(_) => Ok(true),
@@ -236,11 +244,12 @@ where
     /// Returns a JSON string with health status for FFI
     pub async fn get_health_json(&self) -> NaviaResult<String> {
         let result = self.check_health().await?;
-        serde_json::to_string(&result)
-            .map_err(|e| NaviaError::Serialization(crate::error::SerializationError::JsonError {
+        serde_json::to_string(&result).map_err(|e| {
+            NaviaError::Serialization(crate::error::SerializationError::JsonError {
                 context: "health check result".to_string(),
                 details: e.to_string(),
-            }))
+            })
+        })
     }
 
     /// Simple boolean health check for FFI
@@ -253,8 +262,8 @@ where
 mod tests {
     use super::*;
     use crate::error::StorageError;
-    use std::collections::HashMap;
     use async_trait::async_trait;
+    use std::collections::HashMap;
     use std::sync::Mutex;
 
     /// Mock storage for testing
@@ -344,9 +353,11 @@ mod tests {
 
         let result = checker.check_health().await.unwrap();
         assert!(matches!(result.status, HealthStatus::Healthy));
-        
+
         // Storage and crypto should be healthy
-        let storage_health = result.components.iter()
+        let storage_health = result
+            .components
+            .iter()
             .find(|c| c.name == "Storage")
             .unwrap();
         assert!(matches!(storage_health.status, HealthStatus::Healthy));
@@ -356,16 +367,21 @@ mod tests {
     async fn test_storage_failure() {
         let storage = Arc::new(MockStorage::new());
         storage.set_fail_mode(Some("write".to_string()));
-        
+
         let checker = HealthChecker::new(storage);
         let result = checker.check_health().await.unwrap();
-        
+
         assert!(matches!(result.status, HealthStatus::Unhealthy { .. }));
-        
-        let storage_health = result.components.iter()
+
+        let storage_health = result
+            .components
+            .iter()
             .find(|c| c.name == "Storage")
             .unwrap();
-        assert!(matches!(storage_health.status, HealthStatus::Unhealthy { .. }));
+        assert!(matches!(
+            storage_health.status,
+            HealthStatus::Unhealthy { .. }
+        ));
     }
 
     #[tokio::test]
@@ -374,7 +390,7 @@ mod tests {
         let checker = HealthChecker::new(storage.clone());
 
         assert!(checker.quick_check().await.unwrap());
-        
+
         storage.set_fail_mode(Some("read".to_string()));
         assert!(!checker.quick_check().await.unwrap());
     }
@@ -386,7 +402,7 @@ mod tests {
 
         let json = checker.get_health_json().await.unwrap();
         let parsed: HealthCheckResult = serde_json::from_str(&json).unwrap();
-        
+
         assert!(matches!(parsed.status, HealthStatus::Healthy));
         assert!(!parsed.components.is_empty());
     }
