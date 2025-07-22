@@ -45,16 +45,16 @@ jobs:
     - name: Build Android library
       run: |
         cd android
-        ./gradlew :navia:assembleRelease
+        ./gradlew assembleRelease
     
     - name: Run Android tests
       run: |
         cd android
-        ./gradlew :navia:testReleaseUnitTest
+        ./gradlew testReleaseUnitTest
     
     - name: Upload AAR artifact
       uses: actions/upload-artifact@v4
       with:
         name: navia-release-aar
-        path: android/navia/build/outputs/aar/navia-release.aar
+        path: android/build/outputs/aar/navia-release.aar
         retention-days: 7
