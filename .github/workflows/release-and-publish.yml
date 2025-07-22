@@ -147,3 +147,45 @@ jobs:
           asset_path: ./artifacts/navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
           asset_name: navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
           asset_content_type: application/gzip
+
+      # Android build and publish
+      - name: Setup JDK
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Android NDK
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25b
+          add-to-path: true
+
+      - name: Install cargo-ndk
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: cargo install cargo-ndk
+
+      - name: Add Android targets
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Build Rust libraries for Android
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: |
+          cd scripts
+          ./build-for-android.sh --package
+
+      - name: Build and publish Android AAR
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: |
+          cd android
+          ./gradlew publish -PVERSION_NAME=${{ steps.get_version.outputs.RAW_VERSION }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
