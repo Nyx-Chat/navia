@@ -6,24 +6,9 @@ max_width = 100
 # Use field initialize shorthand
 use_field_init_shorthand = true
 
-# Merge multiple imports into a single nested import
-imports_granularity = "Crate"
-
 # Reorder imports and modules alphabetically
 reorder_imports = true
 reorder_modules = true
-
-# Format code in doc comments
-format_code_in_doc_comments = true
-
-# Normalize comments
-normalize_comments = true
-
-# Wrap comments at max_width
-wrap_comments = true
-
-# Use spaces around ranges
-spaces_around_ranges = true
 
 # Edition 2021 formatting
 edition = "2021"
