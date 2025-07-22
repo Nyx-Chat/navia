@@ -112,7 +112,7 @@ jobs:
       
       - name: Run security audit
         run: |
-          cd rust/navia-core
+          cd rust
           cargo audit
 
   coverage:
