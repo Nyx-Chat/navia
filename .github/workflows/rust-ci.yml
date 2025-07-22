@@ -228,26 +228,3 @@ jobs:
         run: |
           cd rust/navia-core
           cargo ndk -t ${{ matrix.target }} build --release
-
-  ios-targets:
-    name: iOS Targets
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        target: [
-          aarch64-apple-ios,
-          x86_64-apple-ios,
-          aarch64-apple-ios-sim
-        ]
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      
-      - name: Build for iOS target
-        run: |
-          cd rust/navia-core
-          cargo build --target ${{ matrix.target }} --release

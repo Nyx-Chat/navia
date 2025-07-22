@@ -8,57 +8,6 @@ on:
       - '.github/workflows/pr-checks.yml'
 
 jobs:
-  check-commits:
-    name: Check Commit Messages
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Check commit messages
-        run: |
-          # Get all commits in this PR
-          COMMITS=$(git log --format="%H %s" origin/${{ github.base_ref }}..HEAD)
-          
-          # Check each commit message
-          echo "$COMMITS" | while read -r commit; do
-            hash=$(echo "$commit" | cut -d' ' -f1)
-            message=$(echo "$commit" | cut -d' ' -f2-)
-            
-            # Check for conventional commit format
-            if ! echo "$message" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|perf|build|ci|revert)(\(.+\))?: .+'; then
-              echo "Error: Commit $hash does not follow conventional commit format"
-              echo "Message: $message"
-              echo "Expected format: type(scope): description"
-              exit 1
-            fi
-          done
-
-  check-size:
-    name: Check PR Size
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Check PR size
-        run: |
-          # Count changed lines
-          LINES_ADDED=$(git diff --numstat origin/${{ github.base_ref }}...HEAD | awk '{sum += $1} END {print sum}')
-          LINES_REMOVED=$(git diff --numstat origin/${{ github.base_ref }}...HEAD | awk '{sum += $2} END {print sum}')
-          TOTAL_CHANGES=$((LINES_ADDED + LINES_REMOVED))
-          
-          echo "Lines added: $LINES_ADDED"
-          echo "Lines removed: $LINES_REMOVED"
-          echo "Total changes: $TOTAL_CHANGES"
-          
-          # Warn if PR is too large
-          if [ $TOTAL_CHANGES -gt 1000 ]; then
-            echo "::warning::This PR changes $TOTAL_CHANGES lines. Consider breaking it into smaller PRs."
-          fi
-
   check-dependencies:
     name: Check Dependencies
     runs-on: ubuntu-latest

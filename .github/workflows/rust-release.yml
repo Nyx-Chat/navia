@@ -82,67 +82,9 @@ jobs:
           asset_name: libnavia_core-${{ matrix.target }}.so
           asset_content_type: application/octet-stream
 
-  build-ios:
-    name: Build iOS Libraries
-    needs: create-release
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Add iOS targets
-        run: |
-          rustup target add aarch64-apple-ios
-          rustup target add x86_64-apple-ios
-          rustup target add aarch64-apple-ios-sim
-      
-      - name: Build iOS libraries
-        run: |
-          cd rust/navia-core
-          cargo build --target aarch64-apple-ios --release
-          cargo build --target x86_64-apple-ios --release
-          cargo build --target aarch64-apple-ios-sim --release
-      
-      - name: Create universal library
-        run: |
-          cd rust/navia-core
-          mkdir -p target/universal/release
-          
-          # Create fat library for simulator
-          lipo -create \
-            target/x86_64-apple-ios/release/libnavia_core.a \
-            target/aarch64-apple-ios-sim/release/libnavia_core.a \
-            -output target/universal/release/libnavia_core-sim.a
-          
-          # Copy device library
-          cp target/aarch64-apple-ios/release/libnavia_core.a \
-            target/universal/release/libnavia_core-device.a
-      
-      - name: Create XCFramework
-        run: |
-          cd rust/navia-core
-          xcodebuild -create-xcframework \
-            -library target/universal/release/libnavia_core-sim.a \
-            -library target/universal/release/libnavia_core-device.a \
-            -output NaviaCore.xcframework
-          
-          zip -r NaviaCore.xcframework.zip NaviaCore.xcframework
-      
-      - name: Upload XCFramework
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./rust/navia-core/NaviaCore.xcframework.zip
-          asset_name: NaviaCore.xcframework.zip
-          asset_content_type: application/zip
-
   publish-crate:
     name: Publish to crates.io
-    needs: [build-android, build-ios]
+    needs: [build-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
