@@ -231,12 +231,83 @@ cd scripts
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development instructions including:
-- Local development setup
-- Testing procedures
-- Publishing new versions
-- CI/CD workflows
-- Troubleshooting
+### Project Structure
+
+```
+navia/
+├── rust/                    # Rust source code
+│   ├── navia-core/         # Core library with UniFFI bindings
+│   └── Cargo.toml          # Workspace configuration
+├── android/                # Android library wrapper
+│   ├── src/               # Generated Kotlin bindings
+│   └── build.gradle.kts   # Android build configuration
+├── scripts/               # Build scripts
+│   └── build-for-android.sh
+└── .github/workflows/     # CI/CD workflows
+```
+
+### Local Development
+
+1. **Make changes** to Rust code in `rust/navia-core/`
+2. **Test locally**:
+   ```bash
+   cd rust/navia-core
+   cargo test
+   cargo clippy
+   ```
+3. **Build for Android**:
+   ```bash
+   cd scripts
+   ./build-for-android.sh            # Debug build for connected device
+   ./build-for-android.sh --release  # Optimized build for connected device
+   ./build-for-android.sh --all      # Build for all architectures locally
+   ./build-for-android.sh --package  # Package build (for publishing)
+   ```
+   
+   Build modes:
+   - **Local** (default): Builds only for your connected device/emulator
+   - **All** (`--all`): Builds for all architectures to local project
+   - **Package** (`--package`): Builds for all architectures to navia/android/
+
+### Publishing New Version
+
+1. **Update version** in `rust/navia-core/Cargo.toml`
+2. **Commit and tag**:
+   ```bash
+   git commit -am "Release v1.0.x"
+   git tag v1.0.x
+   git push origin main --tags
+   ```
+3. **GitHub Actions** automatically publishes to GitHub Packages
+
+### Testing
+
+```bash
+# Run all tests
+cd rust/navia-core
+cargo test
+
+# Run with specific features
+cargo test --all-features
+
+# Run integration tests only
+cargo test --test '*'
+```
+
+### CI/CD
+
+The project uses GitHub Actions for:
+- **Rust CI**: Tests, clippy, security audit, coverage
+- **Multi-platform**: Linux, macOS, Windows, Android, iOS
+- **Auto-publish**: Tagged releases publish to GitHub Packages
+
+### Recent Improvements
+
+- ✅ Fixed 16KB alignment for Android 15+ (v1.0.8)
+- ✅ Removed JSON wrapping design flaw
+- ✅ Migrated from JNI to pure UniFFI/JNA
+- ✅ Added comprehensive error logging
+- ✅ Production-ready architecture
 
 ## License
 

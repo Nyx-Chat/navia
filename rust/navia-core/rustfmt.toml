@@ -1,0 +1,14 @@
+# Rustfmt configuration for consistent code style
+
+# Maximum line width
+max_width = 100
+
+# Use field initialize shorthand
+use_field_init_shorthand = true
+
+# Reorder imports and modules alphabetically
+reorder_imports = true
+reorder_modules = true
+
+# Edition 2021 formatting
+edition = "2021"

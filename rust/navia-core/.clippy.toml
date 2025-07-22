@@ -1,0 +1,16 @@
+# Clippy configuration for production-ready code
+
+# Warn on all clippy lints by default
+warn-on-all-wildcard-imports = true
+
+# Set maximum cognitive complexity
+cognitive-complexity-threshold = 20
+
+# Set maximum number of lines for functions
+too-many-lines-threshold = 100
+
+# Set maximum number of arguments
+too-many-arguments-threshold = 7
+
+# Enforce documentation
+missing-docs-in-crate-items = true
