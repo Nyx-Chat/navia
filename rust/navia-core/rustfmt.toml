@@ -1,8 +1,5 @@
 # Rustfmt configuration for consistent code style
 
-# Use verbose diffs
-verbose = true
-
 # Maximum line width
 max_width = 100
 
