@@ -13,8 +13,7 @@ use crate::core::validation::{
 };
 use crate::ffi::types::{DIDCommMessage, DidCommError, KeyValue};
 use crate::infrastructure::storage::askar_storage::AskarStorage;
-use affinidi_did_resolver_cache_sdk::config::ClientConfigBuilder;
-use affinidi_did_resolver_cache_sdk::DIDCacheClient;
+use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
 use askar_storage::generate_raw_store_key;
 use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
@@ -172,7 +171,7 @@ impl DidComInterface {
                     }
                 })?;
 
-                let client = DIDCacheClient::new(ClientConfigBuilder::default().build())
+                let client = DIDCacheClient::new(DIDCacheConfigBuilder::default().build())
                     .await
                     .map_err(|e| DidCommError::GeneralError {
                         message: e.to_string(),
@@ -188,7 +187,7 @@ impl DidComInterface {
                     let db = AskarDB::provision(&path_clone, store_key)
                         .await
                         .map_err(|e| crate::error::NaviaError::External(e.to_string()))?;
-                    let client = DIDCacheClient::new(ClientConfigBuilder::default().build())
+                    let client = DIDCacheClient::new(DIDCacheConfigBuilder::default().build())
                         .await
                         .map_err(|e| crate::error::NaviaError::External(e.to_string()))?;
                     Ok::<_, crate::error::NaviaError>((db, client))
