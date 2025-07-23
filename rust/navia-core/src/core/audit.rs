@@ -12,7 +12,7 @@ use std::time::SystemTime;
 pub enum SecurityEvent {
     /// Database opened with encryption
     DatabaseOpened { path: String, timestamp: SystemTime },
-    /// DID generated
+    /// DID generate
     DidGenerated { did: String, timestamp: SystemTime },
     /// Message encrypted
     MessagePacked {
@@ -181,7 +181,7 @@ pub fn audit_log(event: SecurityEvent, context: Option<String>) {
     }
 }
 
-/// Create audit context from common request information
+/// Create an audit context from common request information
 pub fn create_context(user_agent: Option<&str>, ip: Option<&str>) -> Option<String> {
     match (user_agent, ip) {
         (Some(ua), Some(ip)) => Some(format!("UA: {ua}, IP: {ip}")),

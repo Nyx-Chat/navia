@@ -53,7 +53,7 @@ impl MetricsCollector {
 
     /// Initialize with a log file path
     pub fn init(&self, path: PathBuf) -> NaviaResult<()> {
-        // Load existing metrics from file if it exists
+        // Load existing metrics from a file if it exists
         if path.exists() {
             self.load_from_file(&path)?;
         }
@@ -67,7 +67,7 @@ impl MetricsCollector {
         *self.enabled.write() = enabled;
     }
 
-    /// Check if metrics collection is enabled
+    /// Check if a metrics collection is enabled
     pub fn is_enabled(&self) -> bool {
         *self.enabled.read()
     }
@@ -215,7 +215,7 @@ impl MetricsCollector {
                 (summary.total_errors as f64 / summary.total_operations as f64) * 100.0;
         }
 
-        // Clear the duration vectors as they're not needed in output
+        // Clear the duration vectors as they're not needed in the output
         summary.pack_durations.clear();
         summary.unpack_durations.clear();
         summary.storage_read_durations.clear();
@@ -247,7 +247,7 @@ impl MetricsCollector {
     fn append_entry(&self, entry: MetricEntry) {
         let mut entries = self.entries.write();
 
-        // Add new entry
+        // Add a new entry
         entries.push_back(entry.clone());
 
         // Remove old entries if over limit
@@ -376,7 +376,7 @@ mod tests {
         collector.log_error("test.operation", "Test error message");
         collector.record_duration("test.duration", Duration::from_millis(100));
 
-        // Create new collector and load from file
+        // Create a new collector and load from a file
         let collector2 = MetricsCollector::new();
         collector2.init(temp_file.path().to_path_buf()).unwrap();
 
@@ -394,7 +394,7 @@ mod tests {
             collector.log_error(&format!("test.{}", i), "Error message");
         }
 
-        // Should only keep last 1000
+        // Should only keep the last 1000
         let entries = collector.entries.read();
         assert_eq!(entries.len(), MAX_ENTRIES);
     }

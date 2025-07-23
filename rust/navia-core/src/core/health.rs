@@ -200,7 +200,7 @@ where
         let test_key = "__quick_health_check__";
         let test_category = "__health__";
 
-        // Just try to read from storage (non-existent key is fine)
+        // Try to read from storage (non-existent key is fine)
         match self.storage.get(test_category, test_key).await {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),

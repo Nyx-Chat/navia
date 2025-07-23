@@ -129,7 +129,7 @@ impl DidComInterface {
     /// Returns `DidCommError::DatabaseError` if:
     /// - Database creation fails
     /// - Invalid seed is provided
-    /// - File system permissions are insufficient
+    /// - File system permissions are not enough
     ///
     /// Returns `DidCommError::GeneralError` if:
     /// - DID resolver client initialization fails
@@ -145,11 +145,7 @@ impl DidComInterface {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn open(
-        &self,
-        path: String,
-        mut seed: Vec<u8>,
-    ) -> std::result::Result<(), DidCommError> {
+    pub async fn open(&self, path: String, mut seed: Vec<u8>) -> Result<(), DidCommError> {
         // Validate seed before use
         validate_seed(&seed).map_err(|e| DidCommError::ValidationError {
             message: e.to_string(),
@@ -263,7 +259,7 @@ impl DidComInterface {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpack(&self, msg: String) -> std::result::Result<DIDCommMessage, DidCommError> {
+    pub async fn unpack(&self, msg: String) -> Result<DIDCommMessage, DidCommError> {
         // Clone the Arc to avoid holding the lock across await
         let messaging = {
             let lock = self.didcomm_messaging.read().unwrap();
@@ -360,7 +356,7 @@ impl DidComInterface {
         msg: DIDCommMessage,
         from: String,
         to: String,
-    ) -> std::result::Result<String, DidCommError> {
+    ) -> Result<String, DidCommError> {
         // Validate message body size
         validate_message_body(&msg.body).map_err(|e| DidCommError::ValidationError {
             message: e.to_string(),
@@ -423,7 +419,7 @@ impl DidComInterface {
     /// * `uri` - Service endpoint URI where this DID can receive messages
     ///   (e.g., "https://example.com/didcomm")
     /// * `routing_keys` - Optional mediator DIDs for message forwarding.
-    ///   Use empty vector for direct messaging.
+    ///   Use an empty vector for direct messaging.
     ///
     /// # Returns
     ///
@@ -460,7 +456,7 @@ impl DidComInterface {
         &self,
         uri: String,
         routing_keys: Vec<String>,
-    ) -> std::result::Result<String, DidCommError> {
+    ) -> Result<String, DidCommError> {
         // Clone the Arc to avoid holding the lock across await
         let messaging = {
             let lock = self.didcomm_messaging.read().unwrap();
@@ -536,7 +532,7 @@ impl DidComInterface {
         category: String,
         name: String,
         value: String,
-    ) -> std::result::Result<(), DidCommError> {
+    ) -> Result<(), DidCommError> {
         // Validate inputs
         validate_storage_category(&category).map_err(|e| DidCommError::ValidationError {
             message: e.to_string(),
@@ -600,7 +596,7 @@ impl DidComInterface {
     ///
     /// # Returns
     ///
-    /// The stored value, or empty string if not found
+    /// The stored value or empty string if not found
     ///
     /// # Errors
     ///
@@ -622,11 +618,7 @@ impl DidComInterface {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get(
-        &self,
-        category: String,
-        name: String,
-    ) -> std::result::Result<String, DidCommError> {
+    pub async fn get(&self, category: String, name: String) -> Result<String, DidCommError> {
         // Validate inputs
         validate_storage_category(&category).map_err(|e| DidCommError::ValidationError {
             message: e.to_string(),
@@ -693,11 +685,7 @@ impl DidComInterface {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn remove(
-        &self,
-        category: String,
-        name: String,
-    ) -> std::result::Result<(), DidCommError> {
+    pub async fn remove(&self, category: String, name: String) -> Result<(), DidCommError> {
         let messaging = {
             let lock = self.didcomm_messaging.read().unwrap();
             lock.as_ref()
@@ -743,7 +731,7 @@ impl DidComInterface {
     ///
     /// # Errors
     ///
-    /// Returns `DidCommError::DatabaseError` if update fails
+    /// Returns `DidCommError::DatabaseError` if the update fails
     ///
     /// # Example
     ///
@@ -763,7 +751,7 @@ impl DidComInterface {
         category: String,
         name: String,
         value: String,
-    ) -> std::result::Result<(), DidCommError> {
+    ) -> Result<(), DidCommError> {
         let messaging = {
             let lock = self.didcomm_messaging.read().unwrap();
             lock.as_ref()
@@ -840,7 +828,7 @@ impl DidComInterface {
         &self,
         category: String,
         items: Vec<KeyValue>,
-    ) -> std::result::Result<(), DidCommError> {
+    ) -> Result<(), DidCommError> {
         let messaging = {
             let lock = self.didcomm_messaging.read().unwrap();
             lock.as_ref()
@@ -918,7 +906,7 @@ impl DidComInterface {
         &self,
         category: String,
         keys: Vec<String>,
-    ) -> std::result::Result<Vec<KeyValue>, DidCommError> {
+    ) -> Result<Vec<KeyValue>, DidCommError> {
         let messaging = {
             let lock = self.didcomm_messaging.read().unwrap();
             lock.as_ref()
@@ -992,7 +980,7 @@ impl DidComInterface {
     ///
     /// # Errors
     ///
-    /// Returns `DidCommError::GeneralError` if health check fails
+    /// Returns `DidCommError::GeneralError` if a health check fails
     ///
     /// # Example Output
     ///
@@ -1017,7 +1005,7 @@ impl DidComInterface {
     ///   "timestamp": { "secs_since_epoch": 1234567890, "nanos_since_epoch": 0 }
     /// }
     /// ```
-    pub async fn check_health(&self) -> std::result::Result<String, DidCommError> {
+    pub async fn check_health(&self) -> Result<String, DidCommError> {
         // Clone the Arc to avoid holding the lock across await
         let messaging = {
             let lock = self.didcomm_messaging.read().unwrap();
@@ -1094,7 +1082,7 @@ impl DidComInterface {
 
     /// Export error logs for crash reporting.
     ///
-    /// Returns all error logs as JSON array. Use this when user
+    /// Returns all error logs as JSON array. Use this when the user
     /// consents to send crash logs for debugging.
     ///
     /// # Example
@@ -1106,7 +1094,7 @@ impl DidComInterface {
     ///     sendToSupport(logs)
     /// }
     /// ```
-    pub fn export_error_logs(&self) -> std::result::Result<String, DidCommError> {
+    pub fn export_error_logs(&self) -> Result<String, DidCommError> {
         use crate::core::metrics::METRICS;
 
         METRICS
@@ -1119,7 +1107,7 @@ impl DidComInterface {
     /// Clear all error logs.
     ///
     /// Removes all logged errors from the file.
-    pub fn clear_error_logs(&self) -> std::result::Result<(), DidCommError> {
+    pub fn clear_error_logs(&self) -> Result<(), DidCommError> {
         use crate::core::metrics::METRICS;
 
         METRICS.clear();
@@ -1131,10 +1119,7 @@ impl DidComInterface {
     /// # Arguments
     ///
     /// * `enabled` - Whether to log errors to file
-    pub fn set_error_logging_enabled(
-        &self,
-        enabled: bool,
-    ) -> std::result::Result<(), DidCommError> {
+    pub fn set_error_logging_enabled(&self, enabled: bool) -> Result<(), DidCommError> {
         use crate::core::metrics::METRICS;
 
         METRICS.set_enabled(enabled);
@@ -1150,7 +1135,7 @@ impl DidComInterface {
     /// # Note
     ///
     /// The file will be created if it doesn't exist. Keeps last 1000 errors.
-    pub fn init_error_logging(&self, path: String) -> std::result::Result<(), DidCommError> {
+    pub fn init_error_logging(&self, path: String) -> Result<(), DidCommError> {
         use crate::core::metrics::METRICS;
         use std::path::PathBuf;
 

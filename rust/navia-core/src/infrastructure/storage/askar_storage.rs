@@ -17,13 +17,13 @@ use std::sync::Arc;
 ///
 /// - Hardware-backed encryption when available (Android Keystore, iOS Keychain)
 /// - Encrypted storage for all data at rest
-/// - Key derivation from a master seed
+/// - Key derivation from a primary seed
 /// - Support for multiple profiles/wallets
 ///
 /// # Security
 ///
 /// All data stored through this implementation is automatically encrypted
-/// using keys derived from the database's master key. The master key itself
+/// using keys derived from the database's pass key. The pass key itself
 /// should be protected using platform-specific secure storage.
 ///
 /// # Thread Safety

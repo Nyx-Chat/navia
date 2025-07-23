@@ -24,7 +24,7 @@ use async_trait::async_trait;
 ///
 /// # Implementation Notes
 ///
-/// - Implementations must be thread-safe (Send + Sync)
+/// - Implementations must be thread-safe (Send and Sync)
 /// - All operations should be atomic when possible
 /// - Keys should be unique within a category
 /// - Values are stored as strings (can be JSON for complex data)
@@ -233,7 +233,7 @@ pub trait MessageStorage: Send + Sync {
 ///
 /// # Implementation Notes
 ///
-/// - Implementations must be thread-safe (Send + Sync)
+/// - Implementations must be thread-safe (Send and Sync)
 /// - Consider using hardware security modules (HSM) or secure enclaves
 /// - Implement key rotation support where possible
 /// - Use constant-time operations for cryptographic materials

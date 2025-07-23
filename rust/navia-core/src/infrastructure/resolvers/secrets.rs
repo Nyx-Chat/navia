@@ -1,4 +1,4 @@
-//! Secrets resolver implementation using Askar
+//! Secret resolver implementation using Askar
 //!
 //! Resolves secrets stored in the Askar database.
 

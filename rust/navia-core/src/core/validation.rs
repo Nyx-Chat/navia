@@ -60,7 +60,7 @@ pub fn validate_did(did: &str) -> NaviaResult<()> {
         return Err(err.into());
     }
 
-    // Check that there's a method name after "did:"
+    // Check that there's a method name after "did":
     if did.len() <= 4 || !did[4..].contains(':') {
         return Err(ValidationError::InvalidDid {
             value: did.to_string(),
@@ -168,7 +168,7 @@ pub fn validate_seed(seed: &[u8]) -> NaviaResult<()> {
 ///
 /// Ensures:
 /// - The list is not empty
-/// - Does not exceed maximum number of recipients
+/// - Does not exceed the maximum number of recipients
 /// - Each recipient DID is valid
 pub fn validate_recipients(recipients: &[String]) -> NaviaResult<()> {
     if recipients.is_empty() {
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_valid_seed() {
-        // Default config requires 32-byte minimum seed
+        // Default config requires a 32-byte minimum seed
         assert!(validate_seed(&vec![0u8; 32]).is_ok());
         assert!(validate_seed(&vec![0u8; 64]).is_ok());
         assert!(validate_seed(&vec![0u8; 128]).is_ok());
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_invalid_seed() {
-        // All configs now require 32-byte minimum
+        // All configs now require a 32-byte minimum
         assert!(validate_seed(&vec![]).is_err());
         assert!(validate_seed(&vec![0u8; 8]).is_err());
         assert!(validate_seed(&vec![0u8; 16]).is_err());

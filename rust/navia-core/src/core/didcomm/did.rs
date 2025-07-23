@@ -6,7 +6,7 @@
 //!
 //! # DID Structure
 //!
-//! A generated peer DID includes:
+//! A generated peer DID include:
 //! - An Ed25519 key for signing (authentication)
 //! - A P-256 key for encryption (key agreement)
 //! - Service endpoints for message routing
@@ -44,7 +44,7 @@ use serde_json::json;
 /// * `uri` - The service endpoint URI where this DID can receive DIDComm messages.
 ///   Should be a valid HTTPS URL or WebSocket endpoint.
 /// * `routing_keys` - Optional list of mediator DIDs for message forwarding.
-///   Use empty vec if direct messaging without mediators.
+///   Use empty vec of direct messaging without mediators.
 ///
 /// # Returns
 ///

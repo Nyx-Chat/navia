@@ -75,7 +75,7 @@ where
     ///
     /// # Returns
     ///
-    /// A new `DidcommMessaging` instance ready for DIDComm operations.
+    /// A new `DidcommMessaging` instance is ready for DIDComm operations.
     pub fn new(storage: Arc<S>, didcache_client: DIDCacheClient) -> Self {
         Self {
             storage: storage.clone(),
@@ -137,7 +137,7 @@ where
     /// * `msg` - The message to encrypt
     /// * `to` - Recipient's DID
     /// * `from` - Optional sender's DID (required for authenticated encryption)
-    /// * `sign_by` - Optional DID to sign the message (usually same as `from`)
+    /// * `sign_by` - Optional DID to sign the message (usually the same as `from`)
     /// * `opts` - Packing options (algorithms, forward secrecy, etc.)
     ///
     /// # Returns
@@ -306,7 +306,7 @@ where
         // Convert DIDComm message to our core Message
         let core_msg = self.didcomm_to_message(didcomm_msg)?;
 
-        // Audit log the decryption event
+        // Audit logs the decryption event
         audit_log(
             SecurityEvent::MessageUnpacked {
                 from: metadata.encrypted_from_kid.clone(),
@@ -489,7 +489,7 @@ where
             builder = builder.to(recipient.clone());
         }
 
-        // Add sender if present (already validated in pack_encrypted)
+        // Add a sender if present (already validated in pack_encrypted)
         if let Some(from) = &msg.from {
             builder = builder.from(from.clone());
         }
@@ -515,7 +515,7 @@ where
     ///
     /// Currently infallible but returns Result for future extensibility
     fn didcomm_to_message(&self, msg: DIDCommMessage) -> NaviaResult<Message> {
-        // If body is a string value, extract it. Otherwise keep as object
+        // If the body is a string value, extract it. Otherwise, keep as an object
         let body = if msg.body.is_string() {
             MessageBody::String(msg.body.as_str().unwrap_or("").to_string())
         } else {
