@@ -1092,19 +1092,6 @@ impl DidComInterface {
         }
     }
 
-    /// Initialize with development configuration.
-    ///
-    /// Disables rate limiting and enables debug logging.
-    /// Useful for testing and development.
-    pub fn configure_development(&self) -> std::result::Result<(), DidCommError> {
-        let config = crate::core::config::NaviaConfig::development();
-
-        crate::core::config::init_config(config).map_err(|e| DidCommError::GeneralError {
-            message: e.to_string(),
-        })?;
-
-        Ok(())
-    }
 
     /// Export error logs for crash reporting.
     ///

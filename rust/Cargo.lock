@@ -3661,7 +3661,6 @@ dependencies = [
  "didcomm",
  "futures",
  "lazy_static",
- "log",
  "once_cell",
  "parking_lot",
  "serde",

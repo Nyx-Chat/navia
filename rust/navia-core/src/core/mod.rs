@@ -5,7 +5,7 @@
 //! to be tested and used independently of the FFI layer.
 
 pub mod audit;
-pub mod config;
+pub mod constants;
 pub mod didcomm;
 pub mod health;
 pub mod metrics;

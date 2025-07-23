@@ -4,23 +4,12 @@
 //! meets security requirements before processing.
 
 use crate::core::audit::{audit_log, SecurityEvent};
+use crate::core::constants::*;
 use crate::error::{NaviaResult, ValidationError};
 use std::time::SystemTime;
 
-/// Maximum allowed length for a DID string
-pub const MAX_DID_LENGTH: usize = 2048;
-
-/// Maximum allowed length for a message body
-pub const MAX_MESSAGE_BODY_LENGTH: usize = 1_048_576; // 1MB
-
-/// Maximum allowed length for a URI
-pub const MAX_URI_LENGTH: usize = 2048;
-
 /// Maximum number of recipients allowed in a single message
 pub const MAX_RECIPIENTS: usize = 100;
-
-/// Maximum allowed seed length (in bytes)
-pub const MAX_SEED_LENGTH: usize = 1024;
 
 /// Validates a DID string
 ///
@@ -132,16 +121,12 @@ pub fn validate_uri(uri: &str) -> NaviaResult<()> {
 /// Validates a message body
 ///
 /// Ensures the message body:
-/// - Does not exceed maximum length (configurable)
+/// - Does not exceed maximum length (1MB)
 pub fn validate_message_body(body: &str) -> NaviaResult<()> {
-    let config = crate::core::config::get_config().read();
-    let max_size = config.max_message_size;
-    drop(config); // Release the lock
-
-    if body.len() > max_size {
+    if body.len() > MAX_MESSAGE_SIZE {
         return Err(ValidationError::SizeExceeded {
             name: "message body".to_string(),
-            max_size,
+            max_size: MAX_MESSAGE_SIZE,
         }
         .into());
     }
@@ -153,7 +138,7 @@ pub fn validate_message_body(body: &str) -> NaviaResult<()> {
 ///
 /// Ensures the seed:
 /// - Is not empty
-/// - Has a reasonable length (between 16 and MAX_SEED_LENGTH bytes)
+/// - Has a reasonable length (between 32 and MAX_SEED_LENGTH bytes)
 pub fn validate_seed(seed: &[u8]) -> NaviaResult<()> {
     if seed.is_empty() {
         return Err(ValidationError::InvalidSeed {
@@ -162,13 +147,9 @@ pub fn validate_seed(seed: &[u8]) -> NaviaResult<()> {
         .into());
     }
 
-    let config = crate::core::config::get_config().read();
-    let min_length = config.min_seed_length;
-    drop(config); // Release the lock
-
-    if seed.len() < min_length {
+    if seed.len() < MIN_SEED_LENGTH {
         return Err(ValidationError::InvalidSeed {
-            reason: format!("Seed must be at least {min_length} bytes"),
+            reason: format!("Seed must be at least {MIN_SEED_LENGTH} bytes"),
         }
         .into());
     }
@@ -324,15 +305,19 @@ mod tests {
 
     #[test]
     fn test_valid_seed() {
+        // Default config requires 32-byte minimum seed
         assert!(validate_seed(&vec![0u8; 32]).is_ok());
-        assert!(validate_seed(&vec![0u8; 16]).is_ok());
         assert!(validate_seed(&vec![0u8; 64]).is_ok());
+        assert!(validate_seed(&vec![0u8; 128]).is_ok());
     }
 
     #[test]
     fn test_invalid_seed() {
+        // All configs now require 32-byte minimum
         assert!(validate_seed(&vec![]).is_err());
         assert!(validate_seed(&vec![0u8; 8]).is_err());
+        assert!(validate_seed(&vec![0u8; 16]).is_err());
+        assert!(validate_seed(&vec![0u8; 31]).is_err());
         assert!(validate_seed(&vec![0u8; MAX_SEED_LENGTH + 1]).is_err());
     }
 }
