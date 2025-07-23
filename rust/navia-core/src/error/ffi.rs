@@ -27,25 +27,25 @@ use crate::error::NaviaError;
 ///
 /// # Examples
 ///
-/// ```ignore
-/// # use crate::error::ffi::DidCommError;
-/// # fn example() -> Result<(), DidCommError> {
-/// // Database errors
-/// return Err(DidCommError::DatabaseError {
+/// ```
+/// use navia_core::DidCommError;
+///
+/// // Different error types
+/// let db_error = DidCommError::DatabaseError {
 ///     message: "Failed to open database: Permission denied".to_string()
-/// });
+/// };
 ///
-/// // Parsing errors
-/// return Err(DidCommError::ParsingError {
+/// let parse_error = DidCommError::ParsingError {
 ///     message: "Invalid JSON in message body".to_string()
-/// });
+/// };
 ///
-/// // Packing errors
-/// return Err(DidCommError::PackingError {
+/// let pack_error = DidCommError::PackingError {
 ///     message: "Sender keys not found in storage".to_string()
-/// });
-/// # Ok(())
-/// # }
+/// };
+///
+/// // Error messages are accessible
+/// assert!(db_error.to_string().contains("Database error"));
+/// assert!(parse_error.to_string().contains("Parsing error"));
 /// ```
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]

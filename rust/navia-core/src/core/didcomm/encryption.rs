@@ -19,14 +19,14 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```
 //! use navia_core::core::didcomm::encryption::{
 //!     default_pack_options,
 //!     validate_pack_params
 //! };
 //!
 //! // Validate parameters before packing
-//! validate_pack_params("did:peer:bob", Some("did:peer:alice"))?;
+//! assert!(validate_pack_params("did:peer:bob", Some("did:peer:alice")).is_ok());
 //!
 //! // Get default encryption options
 //! let pack_opts = default_pack_options();
@@ -58,17 +58,11 @@ use didcomm::{PackEncryptedOptions, UnpackOptions};
 ///
 /// # Example
 ///
-/// ```ignore
-/// let pack_options = default_pack_options();
+/// ```
+/// use navia_core::core::didcomm::encryption::default_pack_options;
 ///
-/// let packed = message.pack_encrypted(
-///     to,
-///     from,
-///     sign_by,
-///     &did_resolver,
-///     &secrets_resolver,
-///     &pack_options
-/// ).await?;
+/// let pack_options = default_pack_options();
+/// // Options are ready to use for packing
 /// ```
 pub fn default_pack_options() -> PackEncryptedOptions {
     PackEncryptedOptions::default()
@@ -95,15 +89,11 @@ pub fn default_pack_options() -> PackEncryptedOptions {
 ///
 /// # Example
 ///
-/// ```ignore
-/// let unpack_options = default_unpack_options();
+/// ```
+/// use navia_core::core::didcomm::encryption::default_unpack_options;
 ///
-/// let (message, metadata) = DIDCommMessage::unpack(
-///     &encrypted_message,
-///     &did_resolver,
-///     &secrets_resolver,
-///     &unpack_options
-/// ).await?;
+/// let unpack_options = default_unpack_options();
+/// // Options are ready to use for unpacking
 /// ```
 pub fn default_unpack_options() -> UnpackOptions {
     UnpackOptions::default()
@@ -137,12 +127,14 @@ pub fn default_unpack_options() -> UnpackOptions {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use navia_core::core::didcomm::encryption::validate_pack_params;
+///
 /// // Valid authenticated encryption
-/// validate_pack_params("did:peer:bob", Some("did:peer:alice"))?;
+/// assert!(validate_pack_params("did:peer:bob", Some("did:peer:alice")).is_ok());
 ///
 /// // Valid anonymous encryption
-/// validate_pack_params("did:peer:bob", None)?;
+/// assert!(validate_pack_params("did:peer:bob", None).is_ok());
 ///
 /// // Invalid - empty recipient
 /// assert!(validate_pack_params("", Some("did:peer:alice")).is_err());
@@ -200,10 +192,12 @@ pub fn validate_pack_params(to: &str, from: Option<&str>) -> NaviaResult<()> {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use navia_core::core::didcomm::encryption::validate_unpack_message;
+///
 /// // Valid JWE compact format
 /// let jwe = "eyJhbGc.eyJlbmM.SomeIV.EncryptedContent.AuthTag";
-/// validate_unpack_message(jwe)?;
+/// assert!(validate_unpack_message(jwe).is_ok());
 ///
 /// // Invalid - empty message
 /// assert!(validate_unpack_message("").is_err());

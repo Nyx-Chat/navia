@@ -8,6 +8,26 @@ name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 required-features = ["cli"]
 
+[[example]]
+name = "message_flow"
+path = "../../examples/basic/message_flow.rs"
+
+[[example]]
+name = "storage_operations"
+path = "../../examples/basic/storage_operations.rs"
+
+[[example]]
+name = "error_handling"
+path = "../../examples/advanced/error_handling.rs"
+
+[[example]]
+name = "storage_traits"
+path = "../../examples/advanced/storage_traits.rs"
+
+[[example]]
+name = "complete_api"
+path = "../../examples/advanced/complete_api.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

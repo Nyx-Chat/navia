@@ -113,9 +113,14 @@ impl From<(String, String)> for KeyValue {
 ///
 /// # Example
 ///
-/// ```ignore
-/// let result = storage.get("contacts", "alice").await?;
+/// ```
+/// use navia_core::ffi::conversions::optional_tuple_to_keyvalue;
+/// use navia_core::ffi::types::KeyValue;
+///
+/// let result = Some("alice_data".to_string());
 /// let kv = optional_tuple_to_keyvalue("alice".to_string(), result);
+/// assert!(kv.is_some());
+/// assert_eq!(kv.unwrap().key, "alice");
 /// ```
 pub fn optional_tuple_to_keyvalue(key: String, value: Option<String>) -> Option<KeyValue> {
     value.map(|val| KeyValue {
