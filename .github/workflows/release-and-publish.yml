@@ -78,9 +78,7 @@ jobs:
           cp target/x86_64-unknown-linux-gnu/release/libnavia_core.so ../artifacts/ || true
           cp target/x86_64-unknown-linux-gnu/release/libnavia_core.a ../artifacts/ || true
           
-          # Generate UniFFI bindings
-          cargo run --bin uniffi-bindgen --features cli -- generate src/navia.udl --language swift -o ../artifacts/swift
-          cargo run --bin uniffi-bindgen --features cli -- generate src/navia.udl --language kotlin -o ../artifacts/kotlin
+          # Note: Kotlin bindings are generated during Android build process
           
           # Create archive
           cd ../artifacts
@@ -107,12 +105,6 @@ jobs:
             ```gradle
             implementation 'com.github.nyx-chat:navia:${{ steps.get_version.outputs.RAW_VERSION }}'
             ```
-            
-            #### Swift Package Manager
-            See the Swift bindings in the release artifacts.
-            
-            #### Other Platforms
-            Download the release artifacts for your platform.
             
             ---
             *This release was automatically created when the version was bumped in Cargo.toml*
