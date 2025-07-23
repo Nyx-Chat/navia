@@ -22,7 +22,9 @@ use std::collections::HashMap;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use navia_core::core::didcomm::message::{Message, MessageBody};
+///
 /// let message = Message::new(
 ///     "unique-id-123".to_string(),
 ///     "https://didcomm.org/basicmessage/2.0/message".to_string(),
@@ -30,6 +32,9 @@ use std::collections::HashMap;
 /// )
 /// .from("did:peer:sender".to_string())
 /// .to("did:peer:recipient".to_string());
+///
+/// assert_eq!(message.id, "unique-id-123");
+/// assert_eq!(message.to.len(), 1);
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
@@ -67,15 +72,23 @@ pub struct Message {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```
+/// use navia_core::core::didcomm::message::MessageBody;
+/// use serde_json::json;
+///
 /// // Simple string body
 /// let body = MessageBody::String("Hello!".to_string());
 ///
 /// // Complex JSON body
-/// let body = MessageBody::Object(json!({
+/// let json_body = MessageBody::Object(json!({
 ///     "content": "Hello!",
 ///     "timestamp": "2024-01-01T12:00:00Z"
 /// }));
+///
+/// match body {
+///     MessageBody::String(s) => assert_eq!(s, "Hello!"),
+///     _ => panic!("Expected string body"),
+/// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]

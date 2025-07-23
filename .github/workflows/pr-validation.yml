@@ -1,0 +1,159 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Quick checks that should fail fast
+  quick-checks:
+    name: Quick Checks
+    runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Check formatting
+        run: |
+          cd rust/navia-core
+          cargo fmt -- --check
+      
+      - name: Check compilation
+        run: |
+          cd rust/navia-core
+          cargo check --all-features
+      
+      - name: Run clippy
+        run: |
+          cd rust/navia-core
+          cargo clippy -- -D warnings
+
+  # Rust tests - run in parallel with Android build
+  rust-tests:
+    name: Rust Tests
+    runs-on: runs-on=${{ github.run_id }}/runner=4cpu-linux-x64
+    needs: quick-checks
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run tests
+        run: |
+          cd rust/navia-core
+          cargo test --all-features
+      
+      - name: Run doc tests
+        run: |
+          cd rust/navia-core
+          cargo test --doc
+
+  # Android build - run in parallel with Rust tests
+  android-build:
+    name: Android Build
+    runs-on: runs-on=${{ github.run_id }}/runner=8cpu-linux-x64
+    needs: quick-checks
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25b
+          add-to-path: true
+        id: setup-ndk
+      
+      - name: Set Android NDK environment
+        run: |
+          echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+      
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+      
+      - name: Build Rust libraries for Android
+        run: |
+          cd scripts
+          ./build-for-android.sh --package
+      
+      - name: Build Android library
+        run: |
+          cd android
+          ./gradlew assembleRelease
+      
+      - name: Run Android tests
+        run: |
+          cd android
+          ./gradlew testReleaseUnitTest
+
+  # Security and quality checks - can run slower
+  quality-checks:
+    name: Quality Checks
+    runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
+    needs: quick-checks
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      
+      - name: Run security audit
+        run: |
+          cd rust
+          cargo audit
+      
+      - name: Check documentation
+        run: |
+          cd rust/navia-core
+          cargo doc --no-deps --all-features

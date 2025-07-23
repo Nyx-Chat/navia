@@ -19,8 +19,8 @@
 ///
 /// # Examples
 ///
-/// ```ignore
-/// # use crate::ffi::DIDCommMessage;
+/// ```
+/// use navia_core::ffi::types::DIDCommMessage;
 /// // Basic message
 /// let message = DIDCommMessage {
 ///     id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
@@ -38,6 +38,9 @@
 ///     from: Some("did:peer:alice".to_string()),
 ///     to: vec!["did:peer:bob".to_string()],
 /// };
+///
+/// assert_eq!(message.msg_type, "https://example.org/protocols/1.0/ping");
+/// assert_eq!(message_with_content.to.len(), 1);
 /// ```
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct DIDCommMessage {
@@ -66,8 +69,8 @@ pub struct DIDCommMessage {
 ///
 /// # Examples
 ///
-/// ```ignore
-/// # use crate::ffi::KeyValue;
+/// ```
+/// use navia_core::ffi::types::KeyValue;
 /// // Simple key-value
 /// let setting = KeyValue {
 ///     key: "theme".to_string(),
@@ -81,6 +84,9 @@ pub struct DIDCommMessage {
 ///     value: r#"{"did": "did:peer:alice", "name": "Alice Smith"}"#.to_string(),
 ///     metadata: Some("imported:2024-01-01".to_string()),
 /// };
+///
+/// assert_eq!(setting.key, "theme");
+/// assert!(contact.metadata.is_some());
 /// ```
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct KeyValue {

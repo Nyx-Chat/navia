@@ -257,9 +257,8 @@ impl MetricsCollector {
 
         // Write to file
         if let Some(path) = &*self.file_path.read() {
-            if let Err(e) = self.append_to_file(path, &entry) {
-                log::error!("Failed to write metric to file: {e}");
-            }
+            // Silently ignore file write errors - mobile app should handle its own logging
+            let _ = self.append_to_file(path, &entry);
         }
     }
 

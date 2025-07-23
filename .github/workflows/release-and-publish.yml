@@ -9,7 +9,7 @@ on:
 
 jobs:
   release-and-publish:
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{ github.run_id }}/runner=8cpu-linux-x64
     permissions:
       contents: write
     steps:
@@ -43,16 +43,12 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Install cargo-workspaces
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        run: cargo install cargo-workspaces
-
-      - name: Build and test
+      # Skip tests - they already passed in PR validation
+      - name: Build release
         if: steps.check_tag.outputs.EXISTS == 'false'
         working-directory: rust
         run: |
           cargo build --release
-          cargo test --release
 
       - name: Create and push tag
         if: steps.check_tag.outputs.EXISTS == 'false'
@@ -166,6 +162,13 @@ jobs:
         with:
           ndk-version: r25b
           add-to-path: true
+        id: setup-ndk
+      
+      - name: Set Android NDK environment
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: |
+          echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
 
       - name: Install cargo-ndk
         if: steps.check_tag.outputs.EXISTS == 'false'

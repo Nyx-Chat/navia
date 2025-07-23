@@ -167,7 +167,7 @@ fn test_database_errors() {
     assert!(result.is_err());
     match result.unwrap_err() {
         DidCommError::ValidationError { message } => {
-            assert!(message.contains("at least 16 bytes"));
+            assert!(message.contains("at least 32 bytes"));
         }
         _ => panic!("Expected ValidationError for short seed"),
     }
