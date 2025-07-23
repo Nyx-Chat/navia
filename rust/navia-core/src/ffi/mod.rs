@@ -1,6 +1,6 @@
 //! FFI/UniFFI layer - Thin wrapper around core functionality
 //!
-//! This module contains all UniFFI-specific code including:
+//! This module contains all UniFFI-specific code including
 //! - UniFFI object definitions
 //! - FFI-specific types
 //! - Conversions between FFI and core types

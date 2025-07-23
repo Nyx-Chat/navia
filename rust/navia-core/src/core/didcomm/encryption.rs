@@ -77,7 +77,7 @@ pub fn default_pack_options() -> PackEncryptedOptions {
 ///
 /// # Default Settings
 ///
-/// - **Expect Decrypt By All Keys**: false (use specific recipient key)
+/// - **Expect Decrypt By All Keys**: false (use a specific recipient key)
 /// - **Unwrap Re-Wrapped In Forward**: true (support message forwarding)
 ///
 /// # When to Use
@@ -119,7 +119,7 @@ pub fn default_unpack_options() -> UnpackOptions {
 ///
 /// 1. Recipient (`to`) must not be empty
 /// 2. Sender (`from`), if provided, must not be empty
-/// 3. DIDs are not validated for format here (done elsewhere)
+/// 3. DIDs are not validated for the format here (done elsewhere)
 ///
 /// # Errors
 ///

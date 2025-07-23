@@ -11,6 +11,24 @@ use std::time::SystemTime;
 /// Maximum number of recipients allowed in a single message
 pub const MAX_RECIPIENTS: usize = 100;
 
+/// Checks if a character is valid for storage identifiers (alphanumeric, dash, or underscore)
+#[inline]
+fn is_valid_storage_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '-' || c == '_'
+}
+
+/// Validates that a string contains only valid storage characters
+fn validate_storage_chars(value: &str) -> NaviaResult<()> {
+    if !value.chars().all(is_valid_storage_char) {
+        return Err(ValidationError::InvalidStorageKey {
+            value: value.to_string(),
+            reason: "contains invalid characters (only alphanumeric, -, _ allowed)".to_string(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
 /// Validates a DID string
 ///
 /// Ensures the DID:
@@ -60,7 +78,7 @@ pub fn validate_did(did: &str) -> NaviaResult<()> {
         return Err(err.into());
     }
 
-    // Check that there's a method name after "did:"
+    // Check that there's a method name after "did":
     if did.len() <= 4 || !did[4..].contains(':') {
         return Err(ValidationError::InvalidDid {
             value: did.to_string(),
@@ -168,7 +186,7 @@ pub fn validate_seed(seed: &[u8]) -> NaviaResult<()> {
 ///
 /// Ensures:
 /// - The list is not empty
-/// - Does not exceed maximum number of recipients
+/// - Does not exceed the maximum number of recipients
 /// - Each recipient DID is valid
 pub fn validate_recipients(recipients: &[String]) -> NaviaResult<()> {
     if recipients.is_empty() {
@@ -217,16 +235,7 @@ pub fn validate_storage_key(key: &str) -> NaviaResult<()> {
         .into());
     }
 
-    if !key
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-    {
-        return Err(ValidationError::InvalidStorageKey {
-            value: key.to_string(),
-            reason: "contains invalid characters (only alphanumeric, -, _ allowed)".to_string(),
-        }
-        .into());
-    }
+    validate_storage_chars(key)?;
 
     Ok(())
 }
@@ -254,16 +263,7 @@ pub fn validate_storage_category(category: &str) -> NaviaResult<()> {
         .into());
     }
 
-    if !category
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-    {
-        return Err(ValidationError::InvalidStorageKey {
-            value: category.to_string(),
-            reason: "contains invalid characters (only alphanumeric, -, _ allowed)".to_string(),
-        }
-        .into());
-    }
+    validate_storage_chars(category)?;
 
     Ok(())
 }
@@ -305,19 +305,19 @@ mod tests {
 
     #[test]
     fn test_valid_seed() {
-        // Default config requires 32-byte minimum seed
-        assert!(validate_seed(&vec![0u8; 32]).is_ok());
-        assert!(validate_seed(&vec![0u8; 64]).is_ok());
-        assert!(validate_seed(&vec![0u8; 128]).is_ok());
+        // Default config requires a 32-byte minimum seed
+        assert!(validate_seed(&[0u8; 32]).is_ok());
+        assert!(validate_seed(&[0u8; 64]).is_ok());
+        assert!(validate_seed(&[0u8; 128]).is_ok());
     }
 
     #[test]
     fn test_invalid_seed() {
-        // All configs now require 32-byte minimum
-        assert!(validate_seed(&vec![]).is_err());
-        assert!(validate_seed(&vec![0u8; 8]).is_err());
-        assert!(validate_seed(&vec![0u8; 16]).is_err());
-        assert!(validate_seed(&vec![0u8; 31]).is_err());
+        // All configs now require a 32-byte minimum
+        assert!(validate_seed(&[]).is_err());
+        assert!(validate_seed(&[0u8; 8]).is_err());
+        assert!(validate_seed(&[0u8; 16]).is_err());
+        assert!(validate_seed(&[0u8; 31]).is_err());
         assert!(validate_seed(&vec![0u8; MAX_SEED_LENGTH + 1]).is_err());
     }
 }

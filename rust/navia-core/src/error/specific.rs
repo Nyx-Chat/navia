@@ -7,7 +7,7 @@ use thiserror::Error;
 /// Errors that can occur during message packing (encryption)
 #[derive(Debug, Clone, Error)]
 pub enum PackingError {
-    /// Sender's private key not found in storage
+    /// Sender's private key isn't found in storage
     #[error("Sender key not found for DID: {did}")]
     SenderKeyNotFound { did: String },
 
@@ -19,11 +19,11 @@ pub enum PackingError {
     #[error("Encryption failed: {details}")]
     EncryptionFailed { details: String },
 
-    /// Message size exceeds maximum allowed
+    /// Message size exceeds the maximum allowed
     #[error("Message too large: {size} bytes exceeds maximum of {max_size} bytes")]
     MessageTooLarge { size: usize, max_size: usize },
 
-    /// Recipient key not found for DID
+    /// Recipient key isn't found for DID
     #[error("Recipient key not found for DID: {did}")]
     RecipientKeyNotFound { did: String },
 
@@ -75,7 +75,7 @@ pub enum DidError {
     #[error("Key generation failed: {details}")]
     KeyGenerationFailed { details: String },
 
-    /// DID resolution failed
+    /// DID resolution fail
     #[error("Failed to resolve DID {did}: {reason}")]
     ResolutionFailed { did: String, reason: String },
 
@@ -87,7 +87,7 @@ pub enum DidError {
     #[error("Rate limit exceeded: {details}")]
     RateLimitExceeded { details: String },
 
-    /// DID generation failed
+    /// DID generation fail
     #[error("DID generation failed: {details}")]
     GenerationFailed { details: String },
 }
@@ -99,7 +99,7 @@ pub enum StorageError {
     #[error("Database connection failed: {details}")]
     ConnectionFailed { details: String },
 
-    /// Entry not found in storage
+    /// Entry isn't found in storage
     #[error("Entry not found - category: {category}, key: {key}")]
     EntryNotFound { category: String, key: String },
 
@@ -149,7 +149,7 @@ pub enum ResolutionError {
     #[error("Resolver error: {details}")]
     ResolverError { details: String },
 
-    /// DID not found
+    /// DID not find
     #[error("DID not found: {did}")]
     DidNotFound { did: String },
 

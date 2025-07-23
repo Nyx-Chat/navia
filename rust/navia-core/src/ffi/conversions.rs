@@ -6,10 +6,10 @@
 use crate::core::didcomm::message::{Message, MessageBody};
 use crate::ffi::types::{DIDCommMessage, KeyValue};
 
-/// Converts FFI DIDCommMessage to core Message type.
+/// Converts FFI DIDCommMessage to a core Message type.
 ///
 /// This conversion handles the transformation of the message body:
-/// - If the body looks like JSON (starts with '{' or '['), it attempts to parse it
+/// - If the body looks like JSON (starts with '{' or ', ['), it attempts to parse it
 /// - If parsing succeeds, stores it as a structured Object
 /// - If parsing fails or it's not JSON, stores it as a plain String
 ///

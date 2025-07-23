@@ -44,7 +44,7 @@ fn test_health_check_integration() {
         let name = component["name"].as_str().unwrap();
         let status = &component["status"];
 
-        println!("Component {}: {:?}", name, status);
+        println!("Component {name}: {status:?}");
 
         // All should be healthy or degraded (rate limiter might be degraded)
         assert!(status == "Healthy" || status.as_object().unwrap().contains_key("Degraded"));
@@ -70,6 +70,6 @@ fn test_health_check_before_init() {
     assert!(result.is_err());
 
     if let Err(e) = result {
-        println!("Expected error: {:?}", e);
+        println!("Expected error: {e:?}");
     }
 }

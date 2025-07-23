@@ -13,6 +13,30 @@ impl AskarDB {
         Self { backend }
     }
 
+    /// Creates a new backend session with error mapping
+    fn create_session(&self) -> NaviaResult<impl BackendSession> {
+        self.backend.session(None, false).map_err(|err| {
+            NaviaError::Storage(StorageError::OperationFailed {
+                operation: "create_session".to_string(),
+                details: err.to_string(),
+            })
+        })
+    }
+
+    /// Serializes a value to JSON with error mapping
+    fn serialize_value<T: Serialize>(
+        value: &T,
+        category: &str,
+        name: &str,
+    ) -> NaviaResult<Vec<u8>> {
+        serde_json::to_vec(value).map_err(|err| {
+            NaviaError::Serialization(SerializationError::JsonError {
+                context: format!("serializing {category}/{name}"),
+                details: err.to_string(),
+            })
+        })
+    }
+
     pub async fn provision(path: &str, key: PassKey<'_>) -> NaviaResult<Self> {
         SqliteStoreOptions::from_path(path)
             .provision(StoreKeyMethod::RawKey, key, None, false)
@@ -38,14 +62,7 @@ impl AskarDB {
     }
 
     pub async fn get_entry(&self, category: &str, name: &str) -> NaviaResult<Option<Entry>> {
-        self.backend
-            .session(None, false)
-            .map_err(|err| {
-                NaviaError::Storage(StorageError::OperationFailed {
-                    operation: "create_session".to_string(),
-                    details: err.to_string(),
-                })
-            })?
+        self.create_session()?
             .fetch(EntryKind::Item, category, name, false)
             .await
             .map_err(|err| {
@@ -75,14 +92,7 @@ impl AskarDB {
     }
 
     pub async fn insert_entry(&self, category: &str, name: &str, value: &[u8]) -> NaviaResult<()> {
-        self.backend
-            .session(None, false)
-            .map_err(|err| {
-                NaviaError::Storage(StorageError::OperationFailed {
-                    operation: "create_session".to_string(),
-                    details: err.to_string(),
-                })
-            })?
+        self.create_session()?
             .update(
                 EntryKind::Item,
                 EntryOperation::Insert,
@@ -107,24 +117,12 @@ impl AskarDB {
         name: &str,
         value: &T,
     ) -> NaviaResult<()> {
-        let data = serde_json::to_vec(value).map_err(|err| {
-            NaviaError::Serialization(SerializationError::JsonError {
-                context: format!("serializing {category}/{name}"),
-                details: err.to_string(),
-            })
-        })?;
+        let data = Self::serialize_value(value, category, name)?;
         self.insert_entry(category, name, &data).await
     }
 
     pub async fn update_entry(&self, category: &str, name: &str, value: &[u8]) -> NaviaResult<()> {
-        self.backend
-            .session(None, false)
-            .map_err(|err| {
-                NaviaError::Storage(StorageError::OperationFailed {
-                    operation: "create_session".to_string(),
-                    details: err.to_string(),
-                })
-            })?
+        self.create_session()?
             .update(
                 EntryKind::Item,
                 EntryOperation::Replace,
@@ -149,24 +147,12 @@ impl AskarDB {
         name: &str,
         value: &T,
     ) -> NaviaResult<()> {
-        let data = serde_json::to_vec(value).map_err(|err| {
-            NaviaError::Serialization(SerializationError::JsonError {
-                context: format!("serializing {category}/{name}"),
-                details: err.to_string(),
-            })
-        })?;
+        let data = Self::serialize_value(value, category, name)?;
         self.update_entry(category, name, &data).await
     }
 
     pub async fn remove(&self, category: &str, name: &str) -> NaviaResult<()> {
-        self.backend
-            .session(None, false)
-            .map_err(|err| {
-                NaviaError::Storage(StorageError::OperationFailed {
-                    operation: "create_session".to_string(),
-                    details: err.to_string(),
-                })
-            })?
+        self.create_session()?
             .update(
                 EntryKind::Item,
                 EntryOperation::Remove,

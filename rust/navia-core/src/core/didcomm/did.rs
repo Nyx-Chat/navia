@@ -6,7 +6,7 @@
 //!
 //! # DID Structure
 //!
-//! A generated peer DID includes:
+//! A generated peer DID include:
 //! - An Ed25519 key for signing (authentication)
 //! - A P-256 key for encryption (key agreement)
 //! - Service endpoints for message routing
@@ -32,6 +32,30 @@ use did_peer::{
 };
 use didcomm::secrets::{Secret, SecretMaterial, SecretType};
 use serde_json::json;
+use serde_json::Value;
+
+/// Creates a JWK (JSON Web Key) from DIDPeer key parts.
+///
+/// This function centralizes the logic for creating JWK representations
+/// based on the curve type (Ed25519 vs. P-256).
+pub fn create_jwk(curve: &str, d: &str, x: &str, y: &Option<String>) -> Value {
+    match curve {
+        "Ed25519" => json!({
+            "kty": "OKP",
+            "crv": curve,
+            "d": d,
+            "x": x,
+        }),
+        // P-256
+        _ => json!({
+            "kty": "EC",
+            "crv": curve,
+            "d": d,
+            "x": x,
+            "y": y,
+        }),
+    }
+}
 
 /// Generates a new peer DID with associated cryptographic keys.
 ///
@@ -44,7 +68,7 @@ use serde_json::json;
 /// * `uri` - The service endpoint URI where this DID can receive DIDComm messages.
 ///   Should be a valid HTTPS URL or WebSocket endpoint.
 /// * `routing_keys` - Optional list of mediator DIDs for message forwarding.
-///   Use empty vec if direct messaging without mediators.
+///   Use empty vec of direct messaging without mediators.
 ///
 /// # Returns
 ///
@@ -125,22 +149,7 @@ pub fn generate_peer_did(
                 id: format!("{did}#key-{kid}"),
                 type_: SecretType::JsonWebKey2020,
                 secret_material: SecretMaterial::JWK {
-                    private_key_jwk: match key.curve.as_ref() {
-                        "Ed25519" => json!({
-                            "kty": "OKP",
-                            "crv": key.curve,
-                            "d": key.d,
-                            "x": key.x,
-                        }),
-                        // P-256
-                        _ => json!({
-                            "kty": "EC",
-                            "crv": key.curve,
-                            "d": key.d,
-                            "x": key.x,
-                            "y": key.y,
-                        }),
-                    },
+                    private_key_jwk: create_jwk(&key.curve, &key.d, &key.x, &key.y),
                 },
             }
         })
