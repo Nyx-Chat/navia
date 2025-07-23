@@ -1092,7 +1092,6 @@ impl DidComInterface {
         }
     }
 
-
     /// Export error logs for crash reporting.
     ///
     /// Returns all error logs as JSON array. Use this when user
