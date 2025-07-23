@@ -82,7 +82,7 @@ impl DidComInterface {
             .ok_or(DidCommError::GeneralError {
                 message: "Not initialized".to_string(),
             })
-            .map(|m| m.clone())
+            .cloned()
     }
 
     /// Maps a database error to DidCommError::DatabaseError
