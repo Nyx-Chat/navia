@@ -271,7 +271,7 @@ mod tests {
 
             let mut data = self.data.lock().unwrap();
             data.entry(category.to_string())
-                .or_insert_with(HashMap::new)
+                .or_default()
                 .insert(key.to_string(), value.to_string());
             Ok(())
         }

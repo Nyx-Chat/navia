@@ -73,6 +73,51 @@ pub struct DidComInterface {
     pub(crate) runtime: Arc<Runtime>,
 }
 
+// Helper methods for DidComInterface
+impl DidComInterface {
+    /// Gets the messaging handler if initialized, otherwise returns an error
+    fn get_messaging(&self) -> Result<Arc<DidcommMessaging<AskarStorage>>, DidCommError> {
+        let lock = self.didcomm_messaging.read().unwrap();
+        lock.as_ref()
+            .ok_or(DidCommError::GeneralError {
+                message: "Not initialized".to_string(),
+            })
+            .map(|m| m.clone())
+    }
+
+    /// Maps a database error to DidCommError::DatabaseError
+    fn map_db_error<E: std::fmt::Display>(err: E) -> DidCommError {
+        DidCommError::DatabaseError {
+            message: err.to_string(),
+        }
+    }
+
+    /// Fetches multiple values from storage and converts them to KeyValue objects
+    async fn fetch_batch_as_keyvalues(
+        messaging: &Arc<DidcommMessaging<AskarStorage>>,
+        category: &str,
+        keys: Vec<String>,
+    ) -> Result<Vec<KeyValue>, DidCommError> {
+        let mut results = Vec::new();
+        for key in keys {
+            let value = messaging
+                .storage
+                .get(category, &key)
+                .await
+                .map_err(Self::map_db_error)?;
+
+            if let Some(val) = value {
+                results.push(KeyValue {
+                    key: key.clone(),
+                    value: val,
+                    metadata: None,
+                });
+            }
+        }
+        Ok(results)
+    }
+}
+
 #[uniffi::export]
 impl DidComInterface {
     /// Creates a new `DidComInterface` instance.
@@ -161,11 +206,9 @@ impl DidComInterface {
             // Check if we're already in a Tokio context
             let (db, client) = if Handle::try_current().is_ok() {
                 // We're in a context, proceed normally
-                let db = AskarDB::provision(&path, store_key).await.map_err(|e| {
-                    DidCommError::DatabaseError {
-                        message: e.to_string(),
-                    }
-                })?;
+                let db = AskarDB::provision(&path, store_key)
+                    .await
+                    .map_err(Self::map_db_error)?;
 
                 let client = DIDCacheClient::new(DIDCacheConfigBuilder::default().build())
                     .await
@@ -194,9 +237,7 @@ impl DidComInterface {
                     .map_err(|e| DidCommError::GeneralError {
                         message: e.to_string(),
                     })?
-                    .map_err(|e| DidCommError::DatabaseError {
-                        message: e.to_string(),
-                    })?
+                    .map_err(Self::map_db_error)?
             };
 
             let storage = Arc::new(AskarStorage::new(Arc::new(db)));
@@ -261,14 +302,7 @@ impl DidComInterface {
     /// ```
     pub async fn unpack(&self, msg: String) -> Result<DIDCommMessage, DidCommError> {
         // Clone the Arc to avoid holding the lock across await
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
         let (message, _metadata) = if Handle::try_current().is_ok() {
@@ -366,14 +400,7 @@ impl DidComInterface {
         let message: Message = msg.into();
 
         // Clone the Arc to avoid holding the lock across await
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
@@ -458,14 +485,7 @@ impl DidComInterface {
         routing_keys: Vec<String>,
     ) -> Result<String, DidCommError> {
         // Clone the Arc to avoid holding the lock across await
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Ensure we have Tokio context for database operations
         if Handle::try_current().is_ok() {
@@ -541,14 +561,7 @@ impl DidComInterface {
             message: e.to_string(),
         })?;
 
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Audit log the storage operation
         audit_log(
@@ -567,9 +580,7 @@ impl DidComInterface {
                 .storage
                 .insert(&category, &name, &value)
                 .await
-                .map_err(|e| DidCommError::DatabaseError {
-                    message: e.to_string(),
-                })
+                .map_err(Self::map_db_error)
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
@@ -581,9 +592,7 @@ impl DidComInterface {
                 .map_err(|e| DidCommError::GeneralError {
                     message: e.to_string(),
                 })?
-                .map_err(|e| DidCommError::DatabaseError {
-                    message: e.to_string(),
-                })
+                .map_err(Self::map_db_error)
         }
     }
 
@@ -627,22 +636,15 @@ impl DidComInterface {
             message: e.to_string(),
         })?;
 
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
-            let result = messaging.storage.get(&category, &name).await.map_err(|e| {
-                DidCommError::DatabaseError {
-                    message: e.to_string(),
-                }
-            })?;
+            let result = messaging
+                .storage
+                .get(&category, &name)
+                .await
+                .map_err(Self::map_db_error)?;
             Ok(result.unwrap_or_default())
         } else {
             // Use our runtime
@@ -655,9 +657,7 @@ impl DidComInterface {
                 .map_err(|e| DidCommError::GeneralError {
                     message: e.to_string(),
                 })?
-                .map_err(|e| DidCommError::DatabaseError {
-                    message: e.to_string(),
-                })?;
+                .map_err(Self::map_db_error)?;
             Ok(result.unwrap_or_default())
         }
     }
@@ -686,14 +686,7 @@ impl DidComInterface {
     /// # }
     /// ```
     pub async fn remove(&self, category: String, name: String) -> Result<(), DidCommError> {
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
@@ -701,9 +694,7 @@ impl DidComInterface {
                 .storage
                 .remove(&category, &name)
                 .await
-                .map_err(|e| DidCommError::DatabaseError {
-                    message: e.to_string(),
-                })
+                .map_err(Self::map_db_error)
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
@@ -715,9 +706,7 @@ impl DidComInterface {
                 .map_err(|e| DidCommError::GeneralError {
                     message: e.to_string(),
                 })?
-                .map_err(|e| DidCommError::DatabaseError {
-                    message: e.to_string(),
-                })
+                .map_err(Self::map_db_error)
         }
     }
 
@@ -752,14 +741,7 @@ impl DidComInterface {
         name: String,
         value: String,
     ) -> Result<(), DidCommError> {
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
@@ -767,9 +749,7 @@ impl DidComInterface {
                 .storage
                 .update(&category, &name, &value)
                 .await
-                .map_err(|e| DidCommError::DatabaseError {
-                    message: e.to_string(),
-                })
+                .map_err(Self::map_db_error)
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
@@ -781,9 +761,7 @@ impl DidComInterface {
                 .map_err(|e| DidCommError::GeneralError {
                     message: e.to_string(),
                 })?
-                .map_err(|e| DidCommError::DatabaseError {
-                    message: e.to_string(),
-                })
+                .map_err(Self::map_db_error)
         }
     }
 
@@ -829,14 +807,7 @@ impl DidComInterface {
         category: String,
         items: Vec<KeyValue>,
     ) -> Result<(), DidCommError> {
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
@@ -845,9 +816,7 @@ impl DidComInterface {
                     .storage
                     .insert(&category, &item.key, &item.value)
                     .await
-                    .map_err(|e| DidCommError::DatabaseError {
-                        message: e.to_string(),
-                    })?;
+                    .map_err(Self::map_db_error)?;
             }
             Ok(())
         } else {
@@ -859,9 +828,7 @@ impl DidComInterface {
                         .storage
                         .insert(&category, &item.key, &item.value)
                         .await
-                        .map_err(|e| DidCommError::DatabaseError {
-                            message: e.to_string(),
-                        })?;
+                        .map_err(Self::map_db_error)?;
                 }
                 Ok::<(), DidCommError>(())
             });
@@ -907,55 +874,16 @@ impl DidComInterface {
         category: String,
         keys: Vec<String>,
     ) -> Result<Vec<KeyValue>, DidCommError> {
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Not initialized".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
-            let mut results = Vec::new();
-            for key in keys {
-                let value = messaging.storage.get(&category, &key).await.map_err(|e| {
-                    DidCommError::DatabaseError {
-                        message: e.to_string(),
-                    }
-                })?;
-
-                if let Some(val) = value {
-                    results.push(KeyValue {
-                        key: key.clone(),
-                        value: val,
-                        metadata: None,
-                    });
-                }
-            }
-            Ok(results)
+            Self::fetch_batch_as_keyvalues(&messaging, &category, keys).await
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
             let handle = runtime.spawn(async move {
-                let mut results = Vec::new();
-                for key in keys {
-                    let value = messaging.storage.get(&category, &key).await.map_err(|e| {
-                        DidCommError::DatabaseError {
-                            message: e.to_string(),
-                        }
-                    })?;
-
-                    if let Some(val) = value {
-                        results.push(KeyValue {
-                            key: key.clone(),
-                            value: val,
-                            metadata: None,
-                        });
-                    }
-                }
-                Ok::<Vec<KeyValue>, DidCommError>(results)
+                Self::fetch_batch_as_keyvalues(&messaging, &category, keys).await
             });
 
             handle.await.map_err(|e| DidCommError::GeneralError {
@@ -1007,14 +935,11 @@ impl DidComInterface {
     /// ```
     pub async fn check_health(&self) -> Result<String, DidCommError> {
         // Clone the Arc to avoid holding the lock across await
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            lock.as_ref()
-                .ok_or(DidCommError::GeneralError {
-                    message: "Database not opened".to_string(),
-                })?
-                .clone()
-        };
+        let messaging = self
+            .get_messaging()
+            .map_err(|_| DidCommError::GeneralError {
+                message: "Database not opened".to_string(),
+            })?;
 
         let health_checker = crate::core::health::HealthChecker::new(messaging.storage.clone());
 
@@ -1060,12 +985,9 @@ impl DidComInterface {
     /// ```
     pub async fn is_healthy(&self) -> bool {
         // Clone the Arc to avoid holding the lock across await
-        let messaging = {
-            let lock = self.didcomm_messaging.read().unwrap();
-            match lock.as_ref() {
-                Some(m) => m.clone(),
-                None => return false,
-            }
+        let messaging = match self.get_messaging() {
+            Ok(m) => m,
+            Err(_) => return false,
         };
 
         let health_checker = crate::core::health::HealthChecker::new(messaging.storage.clone());

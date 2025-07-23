@@ -251,7 +251,7 @@ fn test_message_with_complex_body() {
     let unpacked = block_on(interface.unpack(packed)).expect("Failed to unpack complex message");
 
     // Verify the complex body is preserved (compare as JSON to ignore formatting)
-    let original_json: serde_json::Value = serde_json::from_str(&complex_body).unwrap();
+    let original_json: serde_json::Value = serde_json::from_str(complex_body).unwrap();
     let unpacked_json: serde_json::Value = serde_json::from_str(&unpacked.body).unwrap();
     assert_eq!(unpacked_json, original_json);
 

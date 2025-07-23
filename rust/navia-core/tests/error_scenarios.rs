@@ -40,8 +40,7 @@ fn test_unpack_invalid_message() {
 
         assert!(
             result.is_err(),
-            "Expected error for invalid message: {}",
-            invalid_msg
+            "Expected error for invalid message: {invalid_msg}"
         );
 
         match result.unwrap_err() {
@@ -241,7 +240,7 @@ fn test_sequential_did_generation() {
 
     for i in 0..5 {
         let did =
-            block_on(interface.generate_did(format!("https://example{}.com/didcomm", i), vec![]))
+            block_on(interface.generate_did(format!("https://example{i}.com/didcomm"), vec![]))
                 .expect("Failed to generate DID");
         dids.push(did);
     }

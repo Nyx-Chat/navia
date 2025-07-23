@@ -180,24 +180,7 @@ where
                 opts,
             )
             .await
-            .map_err(|err| {
-                let error_str = err.to_string();
-                if error_str.contains("Sender key not found") {
-                    NaviaError::from(PackingError::SenderKeyNotFound {
-                        did: from.unwrap_or("unknown").to_string(),
-                    })
-                } else if error_str.contains("Recipient keys not found") {
-                    NaviaError::from(PackingError::RecipientKeyNotFound {
-                        did: to.to_string(),
-                    })
-                } else if error_str.contains("Invalid recipient DID") {
-                    NaviaError::from(PackingError::InvalidRecipientDid {
-                        did: to.to_string(),
-                    })
-                } else {
-                    NaviaError::from(PackingError::EncryptionFailed { details: error_str })
-                }
-            })?;
+            .map_err(|err| Self::map_packing_error(err, to, from))?;
 
         // Audit log the encryption event
         audit_log(
@@ -282,26 +265,7 @@ where
         let (didcomm_msg, metadata) =
             DIDCommMessage::unpack(msg, &self.did_resolver, &self.secrets_resolver, opts)
                 .await
-                .map_err(|err| {
-                    let error_str = err.to_string();
-                    if error_str.contains("Wrong recipient")
-                        || error_str.contains("Recipient key not found")
-                    {
-                        NaviaError::from(UnpackingError::RecipientKeyNotFound {
-                            details: error_str,
-                        })
-                    } else if error_str.contains("Invalid signature") {
-                        NaviaError::from(UnpackingError::InvalidSignature {
-                            signer: "unknown".to_string(),
-                        })
-                    } else if error_str.contains("Malformed")
-                        || error_str.contains("Invalid format")
-                    {
-                        NaviaError::from(UnpackingError::MalformedMessage { details: error_str })
-                    } else {
-                        NaviaError::from(UnpackingError::DecryptionFailed { details: error_str })
-                    }
-                })?;
+                .map_err(Self::map_unpacking_error)?;
 
         // Convert DIDComm message to our core Message
         let core_msg = self.didcomm_to_message(didcomm_msg)?;
@@ -423,22 +387,9 @@ where
                     id: format!("{did}#key-{kid}"),
                     type_: SecretType::JsonWebKey2020,
                     secret_material: SecretMaterial::JWK {
-                        private_key_jwk: match key.curve.as_ref() {
-                            "Ed25519" => json!({
-                                "kty": "OKP",
-                                "crv": key.curve,
-                                "d": key.d,
-                                "x": key.x,
-                            }),
-                            // P-256
-                            _ => json!({
-                                "kty": "EC",
-                                "crv": key.curve,
-                                "d": key.d,
-                                "x": key.x,
-                                "y": key.y,
-                            }),
-                        },
+                        private_key_jwk: crate::core::didcomm::did::create_jwk(
+                            &key.curve, &key.d, &key.x, &key.y,
+                        ),
                     },
                 }
             })
@@ -536,3 +487,45 @@ where
 // The actual resolver implementations from the infrastructure layer
 use crate::infrastructure::resolvers::did::AskarDIDResolver;
 use crate::infrastructure::resolvers::secrets::AskarSecretsResolver;
+
+/// Maps DIDComm library errors to specific NaviaError variants based on error message content.
+///
+/// This function centralizes error mapping logic to avoid duplication between pack and unpack operations.
+trait DidcommErrorMapper {
+    fn map_packing_error(err: didcomm::error::Error, to: &str, from: Option<&str>) -> NaviaError {
+        let error_str = err.to_string();
+        if error_str.contains("Sender key not found") {
+            NaviaError::from(PackingError::SenderKeyNotFound {
+                did: from.unwrap_or("unknown").to_string(),
+            })
+        } else if error_str.contains("Recipient keys not found") {
+            NaviaError::from(PackingError::RecipientKeyNotFound {
+                did: to.to_string(),
+            })
+        } else if error_str.contains("Invalid recipient DID") {
+            NaviaError::from(PackingError::InvalidRecipientDid {
+                did: to.to_string(),
+            })
+        } else {
+            NaviaError::from(PackingError::EncryptionFailed { details: error_str })
+        }
+    }
+
+    fn map_unpacking_error(err: didcomm::error::Error) -> NaviaError {
+        let error_str = err.to_string();
+        if error_str.contains("Wrong recipient") || error_str.contains("Recipient key not found") {
+            NaviaError::from(UnpackingError::RecipientKeyNotFound { details: error_str })
+        } else if error_str.contains("Invalid signature") {
+            NaviaError::from(UnpackingError::InvalidSignature {
+                signer: "unknown".to_string(),
+            })
+        } else if error_str.contains("Malformed") || error_str.contains("Invalid format") {
+            NaviaError::from(UnpackingError::MalformedMessage { details: error_str })
+        } else {
+            NaviaError::from(UnpackingError::DecryptionFailed { details: error_str })
+        }
+    }
+}
+
+/// Implement the error mapper for our handler
+impl<S> DidcommErrorMapper for DidcommMessaging<S> where S: MessageStorage + SecretStorage {}

@@ -40,7 +40,7 @@ fn test_errors_are_logged_to_file() {
     let contents = fs::read_to_string(&metrics_path).unwrap();
 
     // Debug: print what's in the file
-    println!("Metrics file contents:\n{}", contents);
+    println!("Metrics file contents:\n{contents}");
 
     // Should contain an error entry
     assert!(contents.contains("unpacking"));

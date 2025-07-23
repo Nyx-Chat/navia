@@ -391,7 +391,7 @@ mod tests {
 
         // Add more than MAX_ENTRIES
         for i in 0..1500 {
-            collector.log_error(&format!("test.{}", i), "Error message");
+            collector.log_error(&format!("test.{i}"), "Error message");
         }
 
         // Should only keep the last 1000
