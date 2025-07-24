@@ -12,6 +12,7 @@ jobs:
     runs-on: runs-on=${{ github.run_id }}/runner=8cpu-linux-x64
     permissions:
       contents: write
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
