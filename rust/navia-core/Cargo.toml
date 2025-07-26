@@ -56,6 +56,7 @@ cli = ["uniffi/cli"]
 [dev-dependencies]
 tempfile.workspace = true
 futures = "0.3"
+rusty-hook = "0.11"
 
 [lib]
 crate-type = ["cdylib", "lib"]

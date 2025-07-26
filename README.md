@@ -99,6 +99,16 @@ See [Troubleshooting](docs/TROUBLESHOOTING.md) for build issues.
 
 ## Development
 
+### Quick Start
+
+```bash
+git clone https://github.com/Nyx-Chat/navia.git
+cd navia
+make setup  # Installs git hooks and checks environment
+```
+
+That's it! The pre-commit hook will automatically format your code.
+
 ### Testing
 
 ```bash
