@@ -100,14 +100,19 @@ done
 
 # Setup Android NDK
 if [ -z "$ANDROID_NDK_HOME" ]; then
-    # Try common locations
+    # Try common locations - prefer newer versions for 16KB support
     for NDK_PATH in \
+        "$HOME/Library/Android/sdk/ndk/27.1.12297006" \
+        "$HOME/Library/Android/sdk/ndk/27.0.12077973" \
+        "$HOME/Android/Sdk/ndk/27.1.12297006" \
+        "$HOME/Android/Sdk/ndk/27.0.12077973" \
         "$HOME/Library/Android/sdk/ndk/"* \
         "$HOME/Android/Sdk/ndk/"* \
         "/usr/local/android-sdk/ndk/"*
     do
         if [ -d "$NDK_PATH" ]; then
             export ANDROID_NDK_HOME="$NDK_PATH"
+            echo -e "${YELLOW}Using NDK: $NDK_PATH${NC}"
             break
         fi
     done
@@ -145,6 +150,7 @@ for target_pair in "${TARGETS[@]}"; do
     echo -e "${YELLOW}Building for $TARGET ($ABI)...${NC}"
     
     if command -v cargo-ndk &> /dev/null; then
+        # cargo-ndk should respect .cargo/config.toml rustflags
         cargo ndk --target "$TARGET" --platform 21 -- build $CARGO_FLAGS
     else
         cargo build --target "$TARGET" $CARGO_FLAGS
