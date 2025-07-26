@@ -15,7 +15,7 @@ Navia is a high-performance DIDComm v2 messaging library for Android, built with
 - 📱 [Android Integration Guide](ANDROID_INTEGRATION.md) - Complete Android setup and usage
 - 📚 [API Reference](docs/API.md) - Comprehensive API documentation and patterns
 - 🔧 [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
-- ⚠️ [Error Handling](docs/ERROR_HANDLING.md) - Error handling patterns for mobile apps
+- ⚠️ Error Handling - Error handling patterns for mobile apps
 - 💡 [Examples](examples/) - Runnable code examples
 
 ## Quick Start
@@ -98,6 +98,16 @@ Build modes:
 See [Troubleshooting](docs/TROUBLESHOOTING.md) for build issues.
 
 ## Development
+
+### Quick Start
+
+```bash
+git clone https://github.com/Nyx-Chat/navia.git
+cd navia
+make setup  # Installs git hooks and checks environment
+```
+
+That's it! The pre-commit hook will automatically format your code.
 
 ### Testing
 
