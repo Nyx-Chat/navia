@@ -62,3 +62,4 @@ rust/target/
 
 # Claude
 .claude/
+CLAUDE.md
