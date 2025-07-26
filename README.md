@@ -15,7 +15,7 @@ Navia is a high-performance DIDComm v2 messaging library for Android, built with
 - 📱 [Android Integration Guide](ANDROID_INTEGRATION.md) - Complete Android setup and usage
 - 📚 [API Reference](docs/API.md) - Comprehensive API documentation and patterns
 - 🔧 [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
-- ⚠️ [Error Handling](docs/ERROR_HANDLING.md) - Error handling patterns for mobile apps
+- ⚠️ Error Handling - Error handling patterns for mobile apps
 - 💡 [Examples](examples/) - Runnable code examples
 
 ## Quick Start

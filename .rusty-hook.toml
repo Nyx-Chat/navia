@@ -1,0 +1,5 @@
+[hooks]
+pre-commit = "cd rust/navia-core && cargo fmt"
+
+[logging]
+verbose = false
