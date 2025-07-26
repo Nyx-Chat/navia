@@ -1,6 +1,6 @@
 [package]
 name = "navia-core"
-version = "1.1.7"
+version = "1.1.8"
 edition = "2021"
 
 [[bin]]
@@ -41,7 +41,6 @@ did-peer.workspace = true
 affinidi-did-resolver-cache-sdk.workspace = true
 ssi-core.workspace = true
 ssi-dids-core.workspace = true
-anyhow.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 zeroize.workspace = true

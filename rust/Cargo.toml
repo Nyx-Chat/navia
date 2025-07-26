@@ -13,7 +13,6 @@ did-peer = "0.6.3"
 affinidi-did-resolver-cache-sdk = "0.5.5"
 ssi-core = "0.2.2"
 ssi-dids-core = "0.1.2"
-anyhow = "1.0.94"
 thiserror = "2.0.6"
 tokio = { version = "1.41.0", features = ["rt", "rt-multi-thread", "macros"] }
 tempfile = "3.8"
