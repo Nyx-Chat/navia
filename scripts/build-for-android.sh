@@ -100,8 +100,10 @@ done
 
 # Setup Android NDK
 if [ -z "$ANDROID_NDK_HOME" ]; then
-    # Try common locations - prefer newer versions for 16KB support
+    # Try common locations - prefer NDK r28 for automatic 16KB support
     for NDK_PATH in \
+        "$HOME/Library/Android/sdk/ndk/28."* \
+        "$HOME/Android/Sdk/ndk/28."* \
         "$HOME/Library/Android/sdk/ndk/27.1.12297006" \
         "$HOME/Library/Android/sdk/ndk/27.0.12077973" \
         "$HOME/Android/Sdk/ndk/27.1.12297006" \
