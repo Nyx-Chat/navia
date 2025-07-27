@@ -3685,7 +3685,7 @@ dependencies = [
 
 [[package]]
 name = "navia-core"
-version = "1.1.12"
+version = "1.1.13"
 dependencies = [
  "affinidi-did-resolver-cache-sdk",
  "askar-storage",

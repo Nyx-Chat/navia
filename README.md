@@ -97,14 +97,21 @@ See [Troubleshooting](docs/TROUBLESHOOTING.md) for build issues.
 
 ### Android 15+ Compatibility (16KB Page Size)
 
-Starting with Android 15, devices may use 16KB page sizes instead of the traditional 4KB. Navia is fully compatible with these devices:
+Starting with Android 15, devices require native libraries to have 16KB-aligned LOAD segments. Google Play enforces this requirement starting November 1, 2025.
 
-- ✅ All native libraries are built with 16KB alignment
-- ✅ Compatible with Google Play's 16KB requirements
-- ✅ Automatic alignment verification during build
+**Navia is fully compatible with Android 15+ devices:**
+
+- ✅ All 64-bit native libraries are automatically aligned to 16KB boundaries
+- ✅ Build process includes post-build realignment using `realign-android-16kb.py`
+- ✅ Every build is verified with `verify-16kb-alignment.sh`
 - ✅ CI/CD validates alignment on every release
 
-The build script automatically handles this - no additional configuration needed.
+**How it works:**
+1. Libraries are built with NDK r28 and alignment flags
+2. Python script realigns virtual addresses to 16KB boundaries
+3. Verification confirms all LOAD segments are properly aligned
+
+**For developers:** No additional configuration needed - the build script handles everything automatically.
 
 ## Development
 

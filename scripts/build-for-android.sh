@@ -170,20 +170,27 @@ for target_pair in "${TARGETS[@]}"; do
     # Add NDK to PATH for build tools
     export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin:$PATH"
     
-    # Set CC for the target
+    # Set target-specific CC environment variable
     case "$TARGET" in
-        "aarch64-linux-android") export CC="aarch64-linux-android21-clang${CLANG_SUFFIX}" ;;
-        "armv7-linux-androideabi") export CC="armv7a-linux-androideabi21-clang${CLANG_SUFFIX}" ;;
-        "i686-linux-android") export CC="i686-linux-android21-clang${CLANG_SUFFIX}" ;;
-        "x86_64-linux-android") export CC="x86_64-linux-android21-clang${CLANG_SUFFIX}" ;;
+        "aarch64-linux-android") 
+            export CC_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/aarch64-linux-android21-clang${CLANG_SUFFIX}"
+            export AR_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-ar${CLANG_SUFFIX}"
+            ;;
+        "armv7-linux-androideabi") 
+            export CC_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/armv7a-linux-androideabi21-clang${CLANG_SUFFIX}"
+            export AR_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-ar${CLANG_SUFFIX}"
+            ;;
+        "i686-linux-android") 
+            export CC_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/i686-linux-android21-clang${CLANG_SUFFIX}"
+            export AR_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-ar${CLANG_SUFFIX}"
+            ;;
+        "x86_64-linux-android") 
+            export CC_x86_64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/x86_64-linux-android21-clang${CLANG_SUFFIX}"
+            export AR_x86_64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-ar${CLANG_SUFFIX}"
+            ;;
     esac
     
     # Build with proper alignment
-    # For NDK r27+, we need to set the minSdkVersion to ensure 16KB support
-    if [[ "$ANDROID_NDK_HOME" == *"/27."* ]] || [[ "$ANDROID_NDK_HOME" == *"/28."* ]]; then
-        export ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
-    fi
-    
     cargo build --target "$TARGET" $CARGO_FLAGS
     
     # Copy .so file
@@ -193,10 +200,28 @@ for target_pair in "${TARGETS[@]}"; do
     
     cp "$SO_FILE" "$DEST_FILE"
     
-    # Apply 16KB alignment fix if needed
-    if [ -x "$SCRIPT_DIR/fix-android-16kb.sh" ]; then
-        echo "Applying 16KB alignment fix..."
-        "$SCRIPT_DIR/fix-android-16kb.sh" "$DEST_FILE" || true
+    # For 64-bit targets, verify and optionally fix alignment
+    if [[ "$TARGET" == *"64"* ]]; then
+        echo "Checking 16KB alignment for $ABI..."
+        
+        # Use the Python script to fix alignment if available
+        if [ -f "$SCRIPT_DIR/realign-android-16kb.py" ] && command -v python3 &> /dev/null; then
+            echo "Applying 16KB realignment..."
+            python3 "$SCRIPT_DIR/realign-android-16kb.py" "$DEST_FILE" "${DEST_FILE}.aligned"
+            
+            if [ -f "${DEST_FILE}.aligned" ]; then
+                # Backup original
+                cp "$DEST_FILE" "${DEST_FILE}.backup"
+                # Replace with aligned version
+                mv "${DEST_FILE}.aligned" "$DEST_FILE"
+                echo "✅ Realignment complete"
+            fi
+        fi
+        
+        # Verify with our script if available
+        if [ -f "$SCRIPT_DIR/verify-16kb-alignment.sh" ]; then
+            "$SCRIPT_DIR/verify-16kb-alignment.sh" "$DEST_FILE" || echo "⚠️  Warning: Library may not be 16KB aligned"
+        fi
     fi
 done
 
