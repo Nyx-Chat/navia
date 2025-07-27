@@ -134,6 +134,12 @@ jobs:
       - name: Setup Android SDK
         if: steps.check_tag.outputs.EXISTS == 'false'
         uses: android-actions/setup-android@v3
+      
+      - name: Install Android SDK build-tools
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: |
+          sdkmanager --install "build-tools;34.0.0"
+          echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
 
       - name: Setup Android NDK
         if: steps.check_tag.outputs.EXISTS == 'false'

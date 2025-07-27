@@ -40,10 +40,15 @@ echo "========================================="
 
 # Check LOAD segments
 echo "LOAD segments:"
+vaddr_misaligned=false
+offset_misaligned=false
+has_align_flag=true
+
 $READELF -l "$LIBRARY" | grep LOAD | while read line; do
     # Extract offset and virtual address
     offset=$(echo $line | awk '{print $2}')
     vaddr=$(echo $line | awk '{print $3}')
+    align=$(echo $line | awk '{print $NF}')
     
     # Convert hex to decimal and check alignment
     offset_dec=$((16#${offset#0x}))
@@ -52,19 +57,60 @@ $READELF -l "$LIBRARY" | grep LOAD | while read line; do
     offset_aligned=$((offset_dec % 16384))
     vaddr_aligned=$((vaddr_dec % 16384))
     
-    if [ $offset_aligned -eq 0 ] && [ $vaddr_aligned -eq 0 ]; then
-        echo "✅ $line"
+    # Check virtual address alignment (CRITICAL for Android 15+)
+    if [ $vaddr_aligned -eq 0 ]; then
+        vaddr_status="✅"
     else
-        echo "❌ $line"
-        echo "   Offset alignment: $offset_aligned (should be 0)"
-        echo "   VirtAddr alignment: $vaddr_aligned (should be 0)"
+        vaddr_status="❌"
+        echo "vaddr_misaligned=true" >> /tmp/verify_status_$$
+    fi
+    
+    # Check file offset alignment (less critical)
+    if [ $offset_aligned -ne 0 ]; then
+        echo "offset_misaligned=true" >> /tmp/verify_status_$$
+    fi
+    
+    # Check alignment flag
+    if [ "$align" != "0x4000" ]; then
+        echo "has_align_flag=false" >> /tmp/verify_status_$$
+    fi
+    
+    echo "$vaddr_status $line"
+    if [ $vaddr_aligned -ne 0 ] || [ $offset_aligned -ne 0 ]; then
+        [ $offset_aligned -ne 0 ] && echo "   File offset alignment: $offset_aligned (non-zero is okay if VirtAddr is aligned)"
+        [ $vaddr_aligned -ne 0 ] && echo "   ❌ VirtAddr alignment: $vaddr_aligned (MUST be 0 for Android 15+)"
     fi
 done
 
+# Read status from temp file
+if [ -f /tmp/verify_status_$$ ]; then
+    source /tmp/verify_status_$$
+    rm -f /tmp/verify_status_$$
+fi
+
 echo ""
 echo "Summary:"
-if $READELF -l "$LIBRARY" | grep LOAD | grep -q "0x4000$"; then
-    echo "✅ All LOAD segments have 16KB alignment flag (0x4000)"
+echo "========================================="
+
+if [ "$has_align_flag" = true ]; then
+    echo "✅ Alignment flag: All LOAD segments have 0x4000 flag"
 else
-    echo "❌ Some LOAD segments missing 16KB alignment flag"
+    echo "❌ Alignment flag: Missing 16KB alignment flag"
+fi
+
+if [ "$vaddr_misaligned" = false ]; then
+    echo "✅ Virtual addresses: All LOAD segments are 16KB aligned"
+    echo "   This library should work on Android 15+ devices"
+else
+    echo "❌ Virtual addresses: Some segments are NOT 16KB aligned"
+    echo "   This library WILL CRASH on Android 15+ devices"
+fi
+
+if [ "$offset_misaligned" = true ]; then
+    echo "⚠️  File offsets: Not 16KB aligned (this is usually okay)"
+fi
+
+# Exit with error if virtual addresses are misaligned
+if [ "$vaddr_misaligned" = true ]; then
+    exit 1
 fi
