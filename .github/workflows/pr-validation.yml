@@ -117,10 +117,7 @@ jobs:
           echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
           echo "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       
-      - name: Install build tools
-        run: |
-          # Install patchelf for alignment fixes
-          sudo apt-get update && sudo apt-get install -y patchelf
+      # Build tools are included in the NDK
       
       - name: Build Rust libraries for Android
         run: |

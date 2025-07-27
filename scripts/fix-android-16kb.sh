@@ -24,6 +24,11 @@ echo "Fixing 16KB alignment for: $SO_FILE"
 # This script is kept as a placeholder for future alignment fixes if needed
 echo "Note: Library should already be properly aligned by the build process"
 
+# For CI compatibility, ensure we use the correct NDK path
+if [ -n "$ANDROID_NDK_HOME" ]; then
+    export ANDROID_NDK_HOME
+fi
+
 echo "Alignment fix complete. Verifying..."
 
 # Verify the fix

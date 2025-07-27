@@ -8,8 +8,27 @@ if [ -z "$1" ]; then
 fi
 
 LIBRARY="$1"
-NDK_PATH="${ANDROID_NDK_HOME:-$HOME/Library/Android/sdk/ndk/28.2.13676358}"
-READELF="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-readelf"
+
+# Use ANDROID_NDK_HOME if set, otherwise try to find NDK
+if [ -z "$ANDROID_NDK_HOME" ]; then
+    echo "Error: ANDROID_NDK_HOME not set"
+    exit 1
+fi
+NDK_PATH="$ANDROID_NDK_HOME"
+
+# Detect host OS for NDK path
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    NDK_HOST="darwin-x86_64"
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    NDK_HOST="linux-x86_64"
+elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    NDK_HOST="windows-x86_64"
+else
+    echo "Unsupported OS: $OSTYPE"
+    exit 1
+fi
+
+READELF="$NDK_PATH/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-readelf"
 
 if [ ! -f "$READELF" ]; then
     echo "Error: llvm-readelf not found at $READELF"
