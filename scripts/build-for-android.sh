@@ -100,14 +100,10 @@ done
 
 # Setup Android NDK
 if [ -z "$ANDROID_NDK_HOME" ]; then
-    # Try common locations - prefer NDK r28 for automatic 16KB support
+    # Prioritize NDK r28 for automatic 16KB support
     for NDK_PATH in \
         "$HOME/Library/Android/sdk/ndk/28."* \
         "$HOME/Android/Sdk/ndk/28."* \
-        "$HOME/Library/Android/sdk/ndk/27.1.12297006" \
-        "$HOME/Library/Android/sdk/ndk/27.0.12077973" \
-        "$HOME/Android/Sdk/ndk/27.1.12297006" \
-        "$HOME/Android/Sdk/ndk/27.0.12077973" \
         "$HOME/Library/Android/sdk/ndk/"* \
         "$HOME/Android/Sdk/ndk/"* \
         "/usr/local/android-sdk/ndk/"*
@@ -151,16 +147,43 @@ for target_pair in "${TARGETS[@]}"; do
     
     echo -e "${YELLOW}Building for $TARGET ($ABI)...${NC}"
     
-    if command -v cargo-ndk &> /dev/null; then
-        # cargo-ndk should respect .cargo/config.toml rustflags
-        cargo ndk --target "$TARGET" --platform 21 -- build $CARGO_FLAGS
-    else
-        cargo build --target "$TARGET" $CARGO_FLAGS
+    # For NDK r28, we need to ensure proper 16KB alignment
+    export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang"
+    export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/armv7a-linux-androideabi21-clang"
+    export CARGO_TARGET_I686_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/i686-linux-android21-clang"
+    export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/x86_64-linux-android21-clang"
+    
+    # Add NDK to PATH for build tools
+    export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"
+    
+    # Set CC for the target
+    case "$TARGET" in
+        "aarch64-linux-android") export CC="aarch64-linux-android21-clang" ;;
+        "armv7-linux-androideabi") export CC="armv7a-linux-androideabi21-clang" ;;
+        "i686-linux-android") export CC="i686-linux-android21-clang" ;;
+        "x86_64-linux-android") export CC="x86_64-linux-android21-clang" ;;
+    esac
+    
+    # Build with proper alignment
+    # For NDK r27+, we need to set the minSdkVersion to ensure 16KB support
+    if [[ "$ANDROID_NDK_HOME" == *"/27."* ]] || [[ "$ANDROID_NDK_HOME" == *"/28."* ]]; then
+        export ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON
     fi
+    
+    cargo build --target "$TARGET" $CARGO_FLAGS
     
     # Copy .so file
     mkdir -p "$OUTPUT_DIR/jniLibs/$ABI"
-    cp "target/$TARGET/$BUILD_MODE/libnavia_core.so" "$OUTPUT_DIR/jniLibs/$ABI/"
+    SO_FILE="target/$TARGET/$BUILD_MODE/libnavia_core.so"
+    DEST_FILE="$OUTPUT_DIR/jniLibs/$ABI/libnavia_core.so"
+    
+    cp "$SO_FILE" "$DEST_FILE"
+    
+    # Apply 16KB alignment fix if needed
+    if [ -x "$SCRIPT_DIR/fix-android-16kb.sh" ]; then
+        echo "Applying 16KB alignment fix..."
+        "$SCRIPT_DIR/fix-android-16kb.sh" "$DEST_FILE" || true
+    fi
 done
 
 # Generate Kotlin bindings (use first built library)
