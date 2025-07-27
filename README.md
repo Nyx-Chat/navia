@@ -9,6 +9,7 @@ Navia is a high-performance DIDComm v2 messaging library for Android, built with
 - 📦 **Native Kotlin Types** - Structured data types, no JSON string manipulation required
 - ⚡ **Async/Await Support** - Non-blocking operations throughout
 - 🗄️ **Aries Askar Storage** - Secure key management and storage
+- 📱 **Android 15+ Ready** - Full 16KB page size support for future Android devices
 
 ## Documentation
 
@@ -71,12 +72,9 @@ rustup target add aarch64-linux-android armv7-linux-androideabi \
     i686-linux-android x86_64-linux-android
 ```
 
-2. **Android NDK r25b** (auto-detected or set `ANDROID_NDK_ROOT`)
-
-3. **cargo-ndk**:
-```bash
-cargo install cargo-ndk
-```
+2. **Android NDK r27c or r28** (required for 16KB page size support)
+   - Set `ANDROID_NDK_ROOT` or install in standard location
+   - ⚠️ **Important**: NDK r27+ is required for Android 15+ compatibility
 
 ### Build Process
 
@@ -96,6 +94,17 @@ Build modes:
 - **Package** (`--package`): Full build for distribution
 
 See [Troubleshooting](docs/TROUBLESHOOTING.md) for build issues.
+
+### Android 15+ Compatibility (16KB Page Size)
+
+Starting with Android 15, devices may use 16KB page sizes instead of the traditional 4KB. Navia is fully compatible with these devices:
+
+- ✅ All native libraries are built with 16KB alignment
+- ✅ Compatible with Google Play's 16KB requirements
+- ✅ Automatic alignment verification during build
+- ✅ CI/CD validates alignment on every release
+
+The build script automatically handles this - no additional configuration needed.
 
 ## Development
 

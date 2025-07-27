@@ -2,8 +2,8 @@
 linker = "aarch64-linux-android21-clang"
 rustflags = [
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
-    "-C", "link-arg=-Wl,-z,common-page-size=16384",
-    "-C", "link-arg=-Wl,--no-rosegment",
+    "-C", "link-arg=-Wl,-z,common-page-size=4096",
+    "-C", "link-arg=-Wl,-z,separate-code",
     "-C", "link-arg=-Wl,-z,separate-loadable-segments"
 ]
 
@@ -11,8 +11,8 @@ rustflags = [
 linker = "armv7a-linux-androideabi21-clang"
 rustflags = [
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
-    "-C", "link-arg=-Wl,-z,common-page-size=16384",
-    "-C", "link-arg=-Wl,--no-rosegment",
+    "-C", "link-arg=-Wl,-z,common-page-size=4096",
+    "-C", "link-arg=-Wl,-z,separate-code",
     "-C", "link-arg=-Wl,-z,separate-loadable-segments"
 ]
 
@@ -20,8 +20,8 @@ rustflags = [
 linker = "i686-linux-android21-clang"
 rustflags = [
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
-    "-C", "link-arg=-Wl,-z,common-page-size=16384",
-    "-C", "link-arg=-Wl,--no-rosegment",
+    "-C", "link-arg=-Wl,-z,common-page-size=4096",
+    "-C", "link-arg=-Wl,-z,separate-code",
     "-C", "link-arg=-Wl,-z,separate-loadable-segments"
 ]
 
@@ -29,7 +29,7 @@ rustflags = [
 linker = "x86_64-linux-android21-clang"
 rustflags = [
     "-C", "link-arg=-Wl,-z,max-page-size=16384",
-    "-C", "link-arg=-Wl,-z,common-page-size=16384",
-    "-C", "link-arg=-Wl,--no-rosegment",
+    "-C", "link-arg=-Wl,-z,common-page-size=4096",
+    "-C", "link-arg=-Wl,-z,separate-code",
     "-C", "link-arg=-Wl,-z,separate-loadable-segments"
 ]

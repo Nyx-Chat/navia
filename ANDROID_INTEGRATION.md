@@ -9,6 +9,7 @@ This guide walks you through integrating Navia into your Android application usi
 - Target SDK: API 34 (Android 14) or later
 - Kotlin 1.8.0 or later
 - Gradle 8.0 or later
+- Android Gradle Plugin 8.5+ (recommended for 16KB page size support)
 
 ## Installation
 
@@ -37,7 +38,30 @@ Add the following rules to your `proguard-rules.pro`:
 }
 ```
 
-### 3. Add Required Permissions
+### 3. Android 15+ Compatibility (16KB Page Size)
+
+For apps targeting Android 15+ (API 35+), ensure your `build.gradle.kts` includes:
+
+```kotlin
+android {
+    compileSdk = 35
+    
+    defaultConfig {
+        targetSdk = 35
+    }
+    
+    // Required for 16KB page size compatibility
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+}
+```
+
+**Note**: Navia's native libraries are pre-built with 16KB alignment, so no additional configuration is needed. This ensures compatibility with future Android devices using 16KB page sizes.
+
+### 4. Add Required Permissions
 
 In your `AndroidManifest.xml`:
 

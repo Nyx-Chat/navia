@@ -3,8 +3,8 @@ fn main() {
     let target = std::env::var("TARGET").unwrap_or_default();
 
     if target.contains("android") {
-        // These flags are already set in .cargo/config.toml for Android targets
-        // Adding them here would duplicate them
+        // Force 16KB page alignment for Android 15+
+        println!("cargo:rustc-link-arg=-Wl,-z,max-page-size=16384");
 
         // Additional alignment flags for NDK r27+
         if let Ok(ndk_home) = std::env::var("ANDROID_NDK_HOME") {

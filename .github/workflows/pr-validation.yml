@@ -107,7 +107,7 @@ jobs:
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r25b
+          ndk-version: r27c
           add-to-path: true
         id: setup-ndk
       
@@ -115,14 +115,19 @@ jobs:
         run: |
           echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+          echo "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+      # Build tools are included in the NDK
       
       - name: Build Rust libraries for Android
         run: |
           cd scripts
           ./build-for-android.sh --package
+          
+      - name: Verify 16KB alignment
+        run: |
+          echo "Verifying 16KB alignment for Android 15+ compatibility..."
+          ./scripts/verify-16kb-alignment.sh android/src/main/jniLibs/arm64-v8a/libnavia_core.so
       
       - name: Build Android library
         run: |
