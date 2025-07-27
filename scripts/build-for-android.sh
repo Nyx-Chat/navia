@@ -147,21 +147,35 @@ for target_pair in "${TARGETS[@]}"; do
     
     echo -e "${YELLOW}Building for $TARGET ($ABI)...${NC}"
     
+    # Detect host OS for NDK path
+    CLANG_SUFFIX=""
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        NDK_HOST="darwin-x86_64"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        NDK_HOST="linux-x86_64"
+    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
+        NDK_HOST="windows-x86_64"
+        CLANG_SUFFIX=".cmd"
+    else
+        echo "Unsupported OS: $OSTYPE"
+        exit 1
+    fi
+    
     # For NDK r28, we need to ensure proper 16KB alignment
-    export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang"
-    export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/armv7a-linux-androideabi21-clang"
-    export CARGO_TARGET_I686_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/i686-linux-android21-clang"
-    export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/x86_64-linux-android21-clang"
+    export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/aarch64-linux-android21-clang${CLANG_SUFFIX}"
+    export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/armv7a-linux-androideabi21-clang${CLANG_SUFFIX}"
+    export CARGO_TARGET_I686_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/i686-linux-android21-clang${CLANG_SUFFIX}"
+    export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/x86_64-linux-android21-clang${CLANG_SUFFIX}"
     
     # Add NDK to PATH for build tools
-    export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"
+    export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin:$PATH"
     
     # Set CC for the target
     case "$TARGET" in
-        "aarch64-linux-android") export CC="aarch64-linux-android21-clang" ;;
-        "armv7-linux-androideabi") export CC="armv7a-linux-androideabi21-clang" ;;
-        "i686-linux-android") export CC="i686-linux-android21-clang" ;;
-        "x86_64-linux-android") export CC="x86_64-linux-android21-clang" ;;
+        "aarch64-linux-android") export CC="aarch64-linux-android21-clang${CLANG_SUFFIX}" ;;
+        "armv7-linux-androideabi") export CC="armv7a-linux-androideabi21-clang${CLANG_SUFFIX}" ;;
+        "i686-linux-android") export CC="i686-linux-android21-clang${CLANG_SUFFIX}" ;;
+        "x86_64-linux-android") export CC="x86_64-linux-android21-clang${CLANG_SUFFIX}" ;;
     esac
     
     # Build with proper alignment
