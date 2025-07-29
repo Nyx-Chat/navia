@@ -24,7 +24,7 @@ jobs:
       
       - name: Configure git for private repos
         run: |
-          git config --global url."https://${{ secrets.CARGO_GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
       
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -69,7 +69,7 @@ jobs:
       
       - name: Configure git for private repos
         run: |
-          git config --global url."https://${{ secrets.CARGO_GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
       
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -107,7 +107,7 @@ jobs:
       
       - name: Configure git for private repos
         run: |
-          git config --global url."https://${{ secrets.CARGO_GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
       
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -185,7 +185,7 @@ jobs:
       
       - name: Configure git for private repos
         run: |
-          git config --global url."https://${{ secrets.CARGO_GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
       
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
