@@ -12,6 +12,7 @@ env:
   RUST_BACKTRACE: 1
   CARGO_TERM_COLOR: always
   CARGO_NET_GIT_FETCH_WITH_CLI: true
+  CARGO_HOME: /home/runner/.cargo
 
 jobs:
   # Quick checks that should fail fast
@@ -41,6 +42,22 @@ jobs:
           mkdir -p ~/.cargo
           echo "[net]" >> ~/.cargo/config.toml
           echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          
+          # Create a git credential helper script
+          cat > ~/git-askpass.sh << 'EOF'
+          #!/bin/bash
+          case "$1" in
+            Username*) echo "x-access-token" ;;
+            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
+          esac
+          EOF
+          chmod +x ~/git-askpass.sh
+          
+          # Set git to use our credential helper
+          export GIT_ASKPASS=~/git-askpass.sh
+          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
+          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+          
           echo "Created cargo config for git CLI authentication"
           
       - name: Verify git configuration
@@ -104,6 +121,22 @@ jobs:
           mkdir -p ~/.cargo
           echo "[net]" >> ~/.cargo/config.toml
           echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          
+          # Create a git credential helper script
+          cat > ~/git-askpass.sh << 'EOF'
+          #!/bin/bash
+          case "$1" in
+            Username*) echo "x-access-token" ;;
+            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
+          esac
+          EOF
+          chmod +x ~/git-askpass.sh
+          
+          # Set git to use our credential helper
+          export GIT_ASKPASS=~/git-askpass.sh
+          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
+          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+          
           echo "Created cargo config for git CLI authentication"
       
       - name: Cache cargo
@@ -161,6 +194,22 @@ jobs:
           mkdir -p ~/.cargo
           echo "[net]" >> ~/.cargo/config.toml
           echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          
+          # Create a git credential helper script
+          cat > ~/git-askpass.sh << 'EOF'
+          #!/bin/bash
+          case "$1" in
+            Username*) echo "x-access-token" ;;
+            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
+          esac
+          EOF
+          chmod +x ~/git-askpass.sh
+          
+          # Set git to use our credential helper
+          export GIT_ASKPASS=~/git-askpass.sh
+          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
+          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+          
           echo "Created cargo config for git CLI authentication"
       
       - name: Setup Android SDK
@@ -242,6 +291,22 @@ jobs:
           mkdir -p ~/.cargo
           echo "[net]" >> ~/.cargo/config.toml
           echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          
+          # Create a git credential helper script
+          cat > ~/git-askpass.sh << 'EOF'
+          #!/bin/bash
+          case "$1" in
+            Username*) echo "x-access-token" ;;
+            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
+          esac
+          EOF
+          chmod +x ~/git-askpass.sh
+          
+          # Set git to use our credential helper
+          export GIT_ASKPASS=~/git-askpass.sh
+          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
+          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+          
           echo "Created cargo config for git CLI authentication"
       
       - name: Install cargo-audit
