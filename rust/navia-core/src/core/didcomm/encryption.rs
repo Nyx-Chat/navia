@@ -33,7 +33,7 @@
 //! ```
 
 use crate::error::{NaviaError, NaviaResult, ValidationError};
-use didcomm::{PackEncryptedOptions, UnpackOptions};
+use navia_didcomm::{PackEncryptedOptions, UnpackOptions};
 
 /// Returns the default options for packing (encrypting) DIDComm messages.
 ///
