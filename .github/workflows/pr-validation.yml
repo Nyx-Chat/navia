@@ -11,8 +11,6 @@ permissions:
 env:
   RUST_BACKTRACE: 1
   CARGO_TERM_COLOR: always
-  CARGO_NET_GIT_FETCH_WITH_CLI: true
-  CARGO_HOME: /home/runner/.cargo
 
 jobs:
   # Quick checks that should fail fast
@@ -27,47 +25,14 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          echo "Configured git to use PAT for authentication"
-          echo "Git config:"
-          git config --global --list | grep url || true
+          mkdir -p ~/.cargo
+          echo "[net]" >> ~/.cargo/config.toml
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
           
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      
-      - name: Setup cargo config for git authentication
-        run: |
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
-          
-          # Create a git credential helper script
-          cat > ~/git-askpass.sh << 'EOF'
-          #!/bin/bash
-          case "$1" in
-            Username*) echo "x-access-token" ;;
-            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
-          esac
-          EOF
-          chmod +x ~/git-askpass.sh
-          
-          # Set git to use our credential helper
-          export GIT_ASKPASS=~/git-askpass.sh
-          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
-          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
-          
-          echo "Created cargo config for git CLI authentication"
-          
-      - name: Verify git configuration
-        run: |
-          echo "Git config:"
-          git config --global --list | grep url || true
-          echo "Testing private repo access..."
-          git ls-remote https://github.com/Nyx-Chat/navia-didcomm.git HEAD || echo "Direct access failed, but should work through cargo"
-          echo "Cargo config:"
-          cat ~/.cargo/config.toml || true
       
       - name: Cache cargo
         uses: actions/cache@v4
@@ -108,36 +73,12 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          echo "Configured git to use PAT for authentication"
-          echo "Git config:"
-          git config --global --list | grep url || true
-          
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Setup cargo config for git authentication
-        run: |
           mkdir -p ~/.cargo
           echo "[net]" >> ~/.cargo/config.toml
           echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
           
-          # Create a git credential helper script
-          cat > ~/git-askpass.sh << 'EOF'
-          #!/bin/bash
-          case "$1" in
-            Username*) echo "x-access-token" ;;
-            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
-          esac
-          EOF
-          chmod +x ~/git-askpass.sh
-          
-          # Set git to use our credential helper
-          export GIT_ASKPASS=~/git-askpass.sh
-          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
-          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
-          
-          echo "Created cargo config for git CLI authentication"
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
       
       - name: Cache cargo
         uses: actions/cache@v4
@@ -206,9 +147,8 @@ jobs:
           chmod +x ~/git-askpass.sh
           
           # Set git to use our credential helper
-          export GIT_ASKPASS=~/git-askpass.sh
-          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
-          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+          echo "GIT_ASKPASS=$HOME/git-askpass.sh" >> $GITHUB_ENV
+          echo "GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
           
           echo "Created cargo config for git CLI authentication"
       
@@ -278,36 +218,12 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          echo "Configured git to use PAT for authentication"
-          echo "Git config:"
-          git config --global --list | grep url || true
-          
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Setup cargo config for git authentication
-        run: |
           mkdir -p ~/.cargo
           echo "[net]" >> ~/.cargo/config.toml
           echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
           
-          # Create a git credential helper script
-          cat > ~/git-askpass.sh << 'EOF'
-          #!/bin/bash
-          case "$1" in
-            Username*) echo "x-access-token" ;;
-            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
-          esac
-          EOF
-          chmod +x ~/git-askpass.sh
-          
-          # Set git to use our credential helper
-          export GIT_ASKPASS=~/git-askpass.sh
-          echo "export GIT_ASKPASS=~/git-askpass.sh" >> $GITHUB_ENV
-          echo "export GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
-          
-          echo "Created cargo config for git CLI authentication"
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
       
       - name: Install cargo-audit
         run: cargo install cargo-audit
