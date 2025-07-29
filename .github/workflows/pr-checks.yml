@@ -16,6 +16,12 @@ jobs:
     runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Configure git for private repos
+        run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
       
       - name: Check for new dependencies
         run: |
