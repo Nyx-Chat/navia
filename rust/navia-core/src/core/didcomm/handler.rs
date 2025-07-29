@@ -14,8 +14,8 @@ use affinidi_did_resolver_cache_sdk::DIDCacheClient;
 use did_peer::{
     DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys, DIDPeerService, DIDService,
 };
-use didcomm::secrets::{Secret, SecretMaterial, SecretType};
-use didcomm::{
+use navia_didcomm::secrets::{Secret, SecretMaterial, SecretType};
+use navia_didcomm::{
     Message as DIDCommMessage, PackEncryptedMetadata, PackEncryptedOptions, UnpackMetadata,
     UnpackOptions,
 };
@@ -492,7 +492,11 @@ use crate::infrastructure::resolvers::secrets::AskarSecretsResolver;
 ///
 /// This function centralizes error mapping logic to avoid duplication between pack and unpack operations.
 trait DidcommErrorMapper {
-    fn map_packing_error(err: didcomm::error::Error, to: &str, from: Option<&str>) -> NaviaError {
+    fn map_packing_error(
+        err: navia_didcomm::error::Error,
+        to: &str,
+        from: Option<&str>,
+    ) -> NaviaError {
         let error_str = err.to_string();
         if error_str.contains("Sender key not found") {
             NaviaError::from(PackingError::SenderKeyNotFound {
@@ -511,7 +515,7 @@ trait DidcommErrorMapper {
         }
     }
 
-    fn map_unpacking_error(err: didcomm::error::Error) -> NaviaError {
+    fn map_unpacking_error(err: navia_didcomm::error::Error) -> NaviaError {
         let error_str = err.to_string();
         if error_str.contains("Wrong recipient") || error_str.contains("Recipient key not found") {
             NaviaError::from(UnpackingError::RecipientKeyNotFound { details: error_str })

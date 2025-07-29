@@ -4,8 +4,8 @@
 
 use crate::core::storage::traits::SecretStorage;
 use async_trait::async_trait;
-use didcomm::error::{Error, ErrorKind, Result};
-use didcomm::secrets::{Secret, SecretsResolver};
+use navia_didcomm::error::{Error, ErrorKind, Result};
+use navia_didcomm::secrets::{Secret, SecretsResolver};
 use std::sync::Arc;
 
 pub const CATEGORY_SECRET: &str = "secret";

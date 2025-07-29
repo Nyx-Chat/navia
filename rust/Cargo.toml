@@ -4,7 +4,8 @@ resolver = "2"
 
 [workspace.dependencies]
 uniffi = "0.28.2"
-didcomm = { version = "0.4.1", features = ["uniffi"] }
+# Using our fork with security fixes and quantum resistance
+navia-didcomm = { git = "https://github.com/Nyx-Chat/navia-didcomm.git", branch = "main" }
 askar-storage = { git = "https://github.com/openwallet-foundation/askar.git", branch = "main" }
 async-trait = "0.1.83"
 serde_json = "1.0.132"

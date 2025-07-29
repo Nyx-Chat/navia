@@ -4,11 +4,11 @@
 
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
 use async_trait::async_trait;
-use didcomm::did::{
+use navia_didcomm::did::{
     DIDCommMessagingService, DIDDoc, DIDResolver, Service, ServiceKind, VerificationMaterial,
     VerificationMethod, VerificationMethodType,
 };
-use didcomm::error::{Error, ErrorKind, Result};
+use navia_didcomm::error::{Error, ErrorKind, Result};
 use serde_json::Value;
 use ssi_core::OneOrMany;
 use ssi_dids_core::document::service::Endpoint;
@@ -16,6 +16,9 @@ use ssi_dids_core::document::service::Service as ResolvedService;
 use ssi_dids_core::document::verification_method::DIDVerificationMethod;
 use ssi_dids_core::DID;
 use std::vec;
+
+// Type alias for boxed error results in internal functions
+type BoxedResult<T> = std::result::Result<T, Box<Error>>;
 
 pub struct AskarDIDResolver {
     resolver: DIDCacheClient,
@@ -56,19 +59,19 @@ impl DIDResolver for AskarDIDResolver {
             service: resolved_doc
                 .service
                 .iter()
-                .map(map_service)
+                .map(|s| map_service(s).map_err(|e| *e))
                 .collect::<Result<Vec<_>>>()?,
             verification_method: resolved_doc
                 .verification_method
                 .iter()
-                .map(map_verification_method)
+                .map(|vm| map_verification_method(vm).map_err(|e| *e))
                 .collect::<Result<Vec<_>>>()?,
         };
         Ok(Some(doc))
     }
 }
 
-fn map_service(sc: &ResolvedService) -> Result<Service> {
+fn map_service(sc: &ResolvedService) -> BoxedResult<Service> {
     let didcomm_type = "DIDCommMessaging".to_string();
 
     let is_didcomm = match &sc.type_ {
@@ -100,7 +103,7 @@ fn map_service(sc: &ResolvedService) -> Result<Service> {
     }
 }
 
-fn map_verification_method(vm: &DIDVerificationMethod) -> Result<VerificationMethod> {
+fn map_verification_method(vm: &DIDVerificationMethod) -> BoxedResult<VerificationMethod> {
     let (vmtype, material) = match vm.type_.as_ref() {
         "JsonWebKey2020" => (
             VerificationMethodType::JsonWebKey2020,
@@ -138,7 +141,12 @@ fn map_verification_method(vm: &DIDVerificationMethod) -> Result<VerificationMet
                 public_key_multibase: vm.properties["publicKeyMultibase"].to_string(),
             },
         ),
-        _ => Err(Error::msg(ErrorKind::Unsupported, "Unsupported method"))?,
+        _ => {
+            return Err(Box::new(Error::msg(
+                ErrorKind::Unsupported,
+                "Unsupported method",
+            )))
+        }
     };
     Ok(VerificationMethod {
         id: vm.id.to_string(),
@@ -148,7 +156,7 @@ fn map_verification_method(vm: &DIDVerificationMethod) -> Result<VerificationMet
     })
 }
 
-fn endpoint_to_didcomm_messaging_service(endpoint: &Endpoint) -> Result<ServiceKind> {
+fn endpoint_to_didcomm_messaging_service(endpoint: &Endpoint) -> BoxedResult<ServiceKind> {
     match endpoint {
         Endpoint::Uri(uri) => Ok(ServiceKind::DIDCommMessaging {
             value: DIDCommMessagingService {
@@ -160,7 +168,12 @@ fn endpoint_to_didcomm_messaging_service(endpoint: &Endpoint) -> Result<ServiceK
         Endpoint::Map(value) => {
             let value = fix_routing_keys(value.clone());
             Ok(ServiceKind::DIDCommMessaging {
-                value: serde_json::from_value(value)?,
+                value: serde_json::from_value(value).map_err(|e| {
+                    Box::new(Error::msg(
+                        ErrorKind::Malformed,
+                        format!("Failed to parse DIDCommMessaging service: {e}"),
+                    ))
+                })?,
             })
         }
     }

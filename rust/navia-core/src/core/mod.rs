@@ -13,5 +13,4 @@ pub mod storage;
 pub mod validation;
 
 // Re-export commonly used types
-pub use didcomm::handler::DidcommMessaging;
 pub use storage::traits::{MessageStorage, SecretStorage};

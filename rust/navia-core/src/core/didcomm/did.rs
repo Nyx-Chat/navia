@@ -30,7 +30,7 @@ use crate::error::{DidError, NaviaError, NaviaResult};
 use did_peer::{
     DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys, DIDPeerService, DIDService,
 };
-use didcomm::secrets::{Secret, SecretMaterial, SecretType};
+use navia_didcomm::secrets::{Secret, SecretMaterial, SecretType};
 use serde_json::json;
 use serde_json::Value;
 
