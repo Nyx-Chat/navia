@@ -23,6 +23,10 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          mkdir -p ~/.cargo
+          echo "[net]" >> ~/.cargo/config.toml
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          echo "Configured git and cargo for private repo access"
 
       - name: Get version from Cargo.toml
         id: get_version

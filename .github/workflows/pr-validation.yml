@@ -11,6 +11,7 @@ permissions:
 env:
   RUST_BACKTRACE: 1
   CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   # Quick checks that should fail fast
@@ -25,11 +26,26 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      
+          echo "Configured git to use PAT for authentication"
+          
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      
+      - name: Setup cargo config for git authentication
+        run: |
+          mkdir -p ~/.cargo
+          echo "[net]" >> ~/.cargo/config.toml
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          echo "Created cargo config for git CLI authentication"
+          
+      - name: Verify git configuration
+        run: |
+          echo "Git config:"
+          git config --global --list | grep url || true
+          echo "Testing private repo access..."
+          git ls-remote https://github.com/Nyx-Chat/navia-didcomm.git HEAD || echo "Direct access failed, but should work through cargo"
       
       - name: Cache cargo
         uses: actions/cache@v4
@@ -70,9 +86,17 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      
+          echo "Configured git to use PAT for authentication"
+          
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+      
+      - name: Setup cargo config for git authentication
+        run: |
+          mkdir -p ~/.cargo
+          echo "[net]" >> ~/.cargo/config.toml
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          echo "Created cargo config for git CLI authentication"
       
       - name: Cache cargo
         uses: actions/cache@v4
@@ -108,6 +132,7 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          echo "Configured git to use PAT for authentication"
       
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -119,6 +144,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      
+      - name: Setup cargo config for git authentication
+        run: |
+          mkdir -p ~/.cargo
+          echo "[net]" >> ~/.cargo/config.toml
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          echo "Created cargo config for git CLI authentication"
       
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -186,9 +218,17 @@ jobs:
       - name: Configure git for private repos
         run: |
           git config --global url."https://${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-      
+          echo "Configured git to use PAT for authentication"
+          
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+      
+      - name: Setup cargo config for git authentication
+        run: |
+          mkdir -p ~/.cargo
+          echo "[net]" >> ~/.cargo/config.toml
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          echo "Created cargo config for git CLI authentication"
       
       - name: Install cargo-audit
         run: cargo install cargo-audit
