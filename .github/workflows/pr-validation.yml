@@ -152,6 +152,11 @@ jobs:
           
           echo "Created cargo config for git CLI authentication"
       
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+      
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       
