@@ -207,13 +207,14 @@ for target_pair in "${TARGETS[@]}"; do
         # Use the Python script to fix alignment if available
         if [ -f "$SCRIPT_DIR/realign-android-16kb.py" ] && command -v python3 &> /dev/null; then
             echo "Applying 16KB realignment..."
-            python3 "$SCRIPT_DIR/realign-android-16kb.py" "$DEST_FILE" "${DEST_FILE}.aligned"
+            # Create a temporary file in /tmp to save disk space in the build directory
+            TEMP_ALIGNED="/tmp/libnavia_core_aligned_$$.so"
+            python3 "$SCRIPT_DIR/realign-android-16kb.py" "$DEST_FILE" "$TEMP_ALIGNED"
             
-            if [ -f "${DEST_FILE}.aligned" ]; then
-                # Backup original
-                cp "$DEST_FILE" "${DEST_FILE}.backup"
+            if [ -f "$TEMP_ALIGNED" ]; then
+                # Don't create backup to save disk space
                 # Replace with aligned version
-                mv "${DEST_FILE}.aligned" "$DEST_FILE"
+                mv "$TEMP_ALIGNED" "$DEST_FILE"
                 echo "✅ Realignment complete"
             fi
         fi

@@ -212,12 +212,15 @@ jobs:
       - name: Build Android library
         run: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon
+          # Ensure all processes complete
+          sleep 5
       
       - name: Run Android tests
+        timeout-minutes: 10
         run: |
           cd android
-          ./gradlew testReleaseUnitTest
+          ./gradlew testReleaseUnitTest --no-daemon
 
   # Security and quality checks - can run slower
   quality-checks:
