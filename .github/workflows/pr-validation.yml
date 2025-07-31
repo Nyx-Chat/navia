@@ -216,6 +216,16 @@ jobs:
           # Ensure all processes complete
           sleep 5
       
+      - name: Clean up before tests
+        run: |
+          # Clean up build artifacts to free space
+          cd android
+          ./gradlew clean --no-daemon
+          cd ../rust
+          rm -rf target/release/build
+          rm -rf target/release/deps
+          df -h
+      
       - name: Run Android tests
         timeout-minutes: 10
         run: |
