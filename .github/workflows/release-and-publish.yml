@@ -14,6 +14,15 @@ jobs:
       contents: write
       packages: write
     steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo apt-get clean
+          df -h
+      
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -139,6 +148,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Install system dependencies
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+      
       - name: Setup Android SDK
         if: steps.check_tag.outputs.EXISTS == 'false'
         uses: android-actions/setup-android@v3
@@ -169,6 +184,14 @@ jobs:
       - name: Add Android targets
         if: steps.check_tag.outputs.EXISTS == 'false'
         run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Clean up before Android build
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: |
+          # Remove Linux build artifacts to free space
+          rm -rf rust/target/release
+          rm -rf rust/target/x86_64-unknown-linux-gnu
+          df -h
 
       - name: Build Rust libraries for Android
         if: steps.check_tag.outputs.EXISTS == 'false'
