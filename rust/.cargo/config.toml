@@ -1,16 +1,16 @@
 [target.aarch64-linux-android]
 linker = "aarch64-linux-android21-clang"
-rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384", "-C", "link-arg=-Wl,--hash-style=both"]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384", "-C", "link-arg=-Wl,--hash-style=both", "-C", "relocation-model=pic", "-C", "link-arg=-Wl,-z,relro", "-C", "link-arg=-Wl,-z,now"]
 
 [target.armv7-linux-androideabi]
 linker = "armv7a-linux-androideabi21-clang"
-rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384", "-C", "link-arg=-Wl,--hash-style=both"]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384", "-C", "link-arg=-Wl,--hash-style=both", "-C", "relocation-model=pic", "-C", "link-arg=-Wl,-z,relro", "-C", "link-arg=-Wl,-z,now"]
 
 [target.i686-linux-android]
 linker = "i686-linux-android21-clang"
-rustflags = ["-C", "link-arg=-Wl,--hash-style=both"]
+rustflags = ["-C", "link-arg=-Wl,--hash-style=both", "-C", "relocation-model=pic", "-C", "link-arg=-Wl,-z,relro", "-C", "link-arg=-Wl,-z,now"]
 # 32-bit targets don't need 16KB alignment
 
 [target.x86_64-linux-android]
 linker = "x86_64-linux-android21-clang"
-rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384", "-C", "link-arg=-Wl,--hash-style=both"]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384", "-C", "link-arg=-Wl,-z,common-page-size=16384", "-C", "link-arg=-Wl,--hash-style=both", "-C", "relocation-model=pic", "-C", "link-arg=-Wl,-z,relro", "-C", "link-arg=-Wl,-z,now"]
