@@ -67,8 +67,6 @@ if [ "$CI" = "true" ] || [ "$BUILD_ALL_ARCHS" = "true" ]; then
     echo -e "${YELLOW}Building for ALL architectures (CI/Release mode)${NC}"
     TARGETS=(
         "aarch64-linux-android:arm64-v8a"
-        "armv7-linux-androideabi:armeabi-v7a"
-        "i686-linux-android:x86"
         "x86_64-linux-android:x86_64"
     )
 else
@@ -82,8 +80,6 @@ else
     
     case "$ABI" in
         "arm64-v8a") TARGET="aarch64-linux-android" ;;
-        "armeabi-v7a") TARGET="armv7-linux-androideabi" ;;
-        "x86") TARGET="i686-linux-android" ;;
         "x86_64") TARGET="x86_64-linux-android" ;;
         *) TARGET="aarch64-linux-android"; ABI="arm64-v8a" ;;
     esac
