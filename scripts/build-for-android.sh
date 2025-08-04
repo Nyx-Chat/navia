@@ -96,7 +96,7 @@ done
 
 # Setup Android NDK
 if [ -z "$ANDROID_NDK_HOME" ]; then
-    # Prioritize NDK r28 for automatic 16KB support
+    # Prioritize NDK r28 (latest stable)
     for NDK_PATH in \
         "$HOME/Library/Android/sdk/ndk/28."* \
         "$HOME/Android/Sdk/ndk/28."* \
@@ -157,28 +157,18 @@ for target_pair in "${TARGETS[@]}"; do
         exit 1
     fi
     
-    # For NDK r28, we need to ensure proper 16KB alignment
+    # Setup linker paths for supported targets
     export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/aarch64-linux-android21-clang${CLANG_SUFFIX}"
-    export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/armv7a-linux-androideabi21-clang${CLANG_SUFFIX}"
-    export CARGO_TARGET_I686_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/i686-linux-android21-clang${CLANG_SUFFIX}"
     export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/x86_64-linux-android21-clang${CLANG_SUFFIX}"
     
     # Add NDK to PATH for build tools
     export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin:$PATH"
     
-    # Set target-specific CC environment variable
+    # Set target-specific CC environment variables
     case "$TARGET" in
         "aarch64-linux-android") 
             export CC_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/aarch64-linux-android21-clang${CLANG_SUFFIX}"
             export AR_aarch64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-ar${CLANG_SUFFIX}"
-            ;;
-        "armv7-linux-androideabi") 
-            export CC_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/armv7a-linux-androideabi21-clang${CLANG_SUFFIX}"
-            export AR_armv7_linux_androideabi="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-ar${CLANG_SUFFIX}"
-            ;;
-        "i686-linux-android") 
-            export CC_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/i686-linux-android21-clang${CLANG_SUFFIX}"
-            export AR_i686_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/llvm-ar${CLANG_SUFFIX}"
             ;;
         "x86_64-linux-android") 
             export CC_x86_64_linux_android="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin/x86_64-linux-android21-clang${CLANG_SUFFIX}"
@@ -186,7 +176,7 @@ for target_pair in "${TARGETS[@]}"; do
             ;;
     esac
     
-    # Build with proper alignment
+    # Build with cargo directly using old working configuration
     cargo build --target "$TARGET" $CARGO_FLAGS
     
     # Copy .so file
@@ -196,26 +186,11 @@ for target_pair in "${TARGETS[@]}"; do
     
     cp "$SO_FILE" "$DEST_FILE"
     
-    # For 64-bit targets, verify and optionally fix alignment
+    # For 64-bit targets, verify alignment
     if [[ "$TARGET" == *"64"* ]]; then
         echo "Checking 16KB alignment for $ABI..."
         
-        # Use the Python script to fix alignment if available
-        if [ -f "$SCRIPT_DIR/realign-android-16kb.py" ] && command -v python3 &> /dev/null; then
-            echo "Applying 16KB realignment..."
-            # Create a temporary file in /tmp to save disk space in the build directory
-            TEMP_ALIGNED="/tmp/libnavia_core_aligned_$$.so"
-            python3 "$SCRIPT_DIR/realign-android-16kb.py" "$DEST_FILE" "$TEMP_ALIGNED"
-            
-            if [ -f "$TEMP_ALIGNED" ]; then
-                # Don't create backup to save disk space
-                # Replace with aligned version
-                mv "$TEMP_ALIGNED" "$DEST_FILE"
-                echo "✅ Realignment complete"
-            fi
-        fi
-        
-        # Verify with our script if available
+        # Verify alignment with our script if available
         if [ -f "$SCRIPT_DIR/verify-16kb-alignment.sh" ]; then
             "$SCRIPT_DIR/verify-16kb-alignment.sh" "$DEST_FILE" || echo "⚠️  Warning: Library may not be 16KB aligned"
         fi

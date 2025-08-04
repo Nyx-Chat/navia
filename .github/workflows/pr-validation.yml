@@ -137,7 +137,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,x86_64-linux-android
       
       - name: Setup cargo config for git authentication
         run: |
@@ -177,7 +177,7 @@ jobs:
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r28c
           add-to-path: true
         id: setup-ndk
       
