@@ -168,7 +168,7 @@ jobs:
         if: steps.check_tag.outputs.EXISTS == 'false'
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r27c
+          ndk-version: r28c
           add-to-path: true
         id: setup-ndk
       
@@ -183,7 +183,7 @@ jobs:
 
       - name: Add Android targets
         if: steps.check_tag.outputs.EXISTS == 'false'
-        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+        run: rustup target add aarch64-linux-android x86_64-linux-android
 
       - name: Clean up before Android build
         if: steps.check_tag.outputs.EXISTS == 'false'
