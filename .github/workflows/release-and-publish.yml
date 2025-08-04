@@ -61,6 +61,10 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Add Android targets (needed for Cargo.lock)
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        run: rustup target add aarch64-linux-android x86_64-linux-android
+
       # Skip tests - they already passed in PR validation
       - name: Build release
         if: steps.check_tag.outputs.EXISTS == 'false'
@@ -180,10 +184,7 @@ jobs:
           echo "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       # Build tools are included in the NDK
-
-      - name: Add Android targets
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        run: rustup target add aarch64-linux-android x86_64-linux-android
+      # Note: Android targets already added earlier
 
       - name: Clean up before Android build
         if: steps.check_tag.outputs.EXISTS == 'false'
