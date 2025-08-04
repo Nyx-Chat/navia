@@ -196,6 +196,9 @@ jobs:
 
       - name: Build Rust libraries for Android
         if: steps.check_tag.outputs.EXISTS == 'false'
+        env:
+          # Ensure 16KB alignment flags are applied
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS: "-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=4096 -C link-arg=-Wl,-z,separate-code -C link-arg=-Wl,-z,separate-loadable-segments"
         run: |
           cd scripts
           ./build-for-android.sh --package
