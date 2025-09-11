@@ -101,7 +101,75 @@ jobs:
           cd rust/navia-core
           cargo test --doc
 
-  # Android build - run in parallel with Rust tests
+  # iOS build - run in parallel with Android build
+  ios-build:
+    name: iOS Build
+    runs-on: macos-15
+    needs: quick-checks
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Configure git for private repos
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          echo "Configured git to use PAT for authentication"
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+      
+      - name: Setup cargo config for git authentication
+        run: |
+          mkdir -p ~/.cargo
+          echo "[net]" >> ~/.cargo/config.toml
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+          
+          # Create a git credential helper script
+          cat > ~/git-askpass.sh << 'EOF'
+          #!/bin/bash
+          case "$1" in
+            Username*) echo "x-access-token" ;;
+            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
+          esac
+          EOF
+          chmod +x ~/git-askpass.sh
+          
+          # Set git to use our credential helper
+          echo "GIT_ASKPASS=$HOME/git-askpass.sh" >> $GITHUB_ENV
+          echo "GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build Rust libraries for iOS
+        run: |
+          cd scripts
+          ./build-for-ios.sh --package
+      
+      - name: Build iOS framework
+        run: |
+          cd ios
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos build
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator build
+      
+      - name: Run iOS tests
+        run: |
+          cd ios
+          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15' test
+
+  # Android build - run in parallel with iOS build
   android-build:
     name: Android Build
     runs-on: runs-on=${{ github.run_id }}/runner=8cpu-linux-x64
