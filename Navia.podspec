@@ -40,11 +40,11 @@ Pod::Spec.new do |spec|
   # Build script to compile Rust library
   spec.script_phase = {
     :name => 'Build Rust Library',
-    :script => <<-SCRIPT
+    :script => <<-SCRIPT,
       set -e
       cd "${PODS_TARGET_SRCROOT}/scripts"
       ./build-for-ios.sh --release --package
-    SCRIPT,
+SCRIPT
     :execution_position => :before_compile
   }
   
