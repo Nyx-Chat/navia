@@ -111,6 +111,9 @@ fi
 # Set up Cargo config for iOS cross-compilation
 mkdir -p .cargo
 cat > .cargo/config.toml << EOF
+[unstable]
+target-applies-to-host = false
+
 [target.aarch64-apple-ios]
 linker = "$(xcrun --sdk iphoneos --find clang)"
 ar = "$(xcrun --sdk iphoneos --find ar)"
@@ -122,9 +125,6 @@ ar = "$(xcrun --sdk iphonesimulator --find ar)"
 [target.aarch64-apple-ios-sim]
 linker = "$(xcrun --sdk iphonesimulator --find clang)" 
 ar = "$(xcrun --sdk iphonesimulator --find ar)"
-
-[env]
-SDKROOT = "$(xcrun --sdk iphoneos --show-sdk-path)"
 EOF
 
 CARGO_FLAGS=""
@@ -145,8 +145,8 @@ for target_pair in "${TARGETS[@]}"; do
     
     # iOS cross-compilation is now handled by .cargo/config.toml
     
-    # Build with cargo
-    cargo build --target "$TARGET" $CARGO_FLAGS
+    # Build with cargo using unstable target-applies-to-host feature
+    cargo +nightly build -Z target-applies-to-host --target "$TARGET" $CARGO_FLAGS
     
     # For iOS, we always get dylib from cdylib crate type
     # Check what library file actually exists
@@ -249,7 +249,7 @@ fi
 echo -e "${YELLOW}Generating Swift bindings...${NC}"
 cd "$RUST_DIR/navia-core"
 
-cargo run --features cli --bin uniffi-bindgen generate \
+cargo +nightly run --features cli --bin uniffi-bindgen generate \
     --library "../$FINAL_LIB" \
     --language swift \
     --out-dir "$OUTPUT_DIR"
