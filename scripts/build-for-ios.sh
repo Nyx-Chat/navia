@@ -229,8 +229,11 @@ if [ ${#BUILT_LIBS[@]} -gt 1 ]; then
         FINAL_LIB="${DEVICE_LIBS[0]}"
     fi
     
-    # Create the main library for Xcode to find (use simulator for local dev, device for CI)
-    if [ -f "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT" ]; then
+    # Create the main library for Xcode to find (prefer device for release builds, simulator for debug)
+    if [ "$BUILD_MODE" = "release" ] && [ -f "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT" ]; then
+        cp "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT" "target/universal/$BUILD_MODE/libnavia_core.$OUTPUT_EXT"
+        echo -e "${YELLOW}Created main library from device build (release mode)${NC}"
+    elif [ -f "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT" ]; then
         cp "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT" "target/universal/$BUILD_MODE/libnavia_core.$OUTPUT_EXT"
         echo -e "${YELLOW}Created main library from simulator build${NC}"
     elif [ -f "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT" ]; then
