@@ -108,6 +108,25 @@ if [ ! -f "Cargo.lock" ]; then
     exit 1
 fi
 
+# Set up Cargo config for iOS cross-compilation
+mkdir -p .cargo
+cat > .cargo/config.toml << EOF
+[target.aarch64-apple-ios]
+linker = "$(xcrun --sdk iphoneos --find clang)"
+ar = "$(xcrun --sdk iphoneos --find ar)"
+
+[target.x86_64-apple-ios]  
+linker = "$(xcrun --sdk iphonesimulator --find clang)"
+ar = "$(xcrun --sdk iphonesimulator --find ar)"
+
+[target.aarch64-apple-ios-sim]
+linker = "$(xcrun --sdk iphonesimulator --find clang)" 
+ar = "$(xcrun --sdk iphonesimulator --find ar)"
+
+[env]
+SDKROOT = "$(xcrun --sdk iphoneos --show-sdk-path)"
+EOF
+
 CARGO_FLAGS=""
 if [ "$BUILD_MODE" = "release" ]; then
     CARGO_FLAGS="--release"
@@ -124,47 +143,7 @@ for target_pair in "${TARGETS[@]}"; do
     
     echo -e "${YELLOW}Building for $TARGET ($ARCH)...${NC}"
     
-    # Set up iOS cross-compilation environment
-    if [[ "$TARGET" == *"ios"* ]]; then
-        # Determine SDK path based on target
-        if [[ "$TARGET" == *"-sim" ]]; then
-            SDK_NAME="iphonesimulator"
-        else
-            SDK_NAME="iphoneos"
-        fi
-        
-        # Get the SDK path and set up environment
-        SDK_PATH=$(xcrun --sdk "$SDK_NAME" --show-sdk-path)
-        CLANG_PATH=$(xcrun --sdk "$SDK_NAME" --find clang)
-        
-        if [ -n "$SDK_PATH" ] && [ -n "$CLANG_PATH" ]; then
-            export SDKROOT="$SDK_PATH"
-            
-            # Set up iOS-specific environment variables for this target
-            case "$TARGET" in
-                "aarch64-apple-ios")
-                    export CC_aarch64_apple_ios="$CLANG_PATH"
-                    export AR_aarch64_apple_ios="$(xcrun --sdk iphoneos --find ar)"
-                    export CARGO_TARGET_AARCH64_APPLE_IOS_LINKER="$CLANG_PATH"
-                    ;;
-                "x86_64-apple-ios")
-                    export CC_x86_64_apple_ios="$CLANG_PATH"
-                    export AR_x86_64_apple_ios="$(xcrun --sdk iphonesimulator --find ar)"
-                    export CARGO_TARGET_X86_64_APPLE_IOS_LINKER="$CLANG_PATH"
-                    ;;
-                "aarch64-apple-ios-sim")
-                    export CC_aarch64_apple_ios_sim="$CLANG_PATH"
-                    export AR_aarch64_apple_ios_sim="$(xcrun --sdk iphonesimulator --find ar)"
-                    export CARGO_TARGET_AARCH64_APPLE_IOS_SIM_LINKER="$CLANG_PATH"
-                    ;;
-            esac
-            
-            echo "Setting SDKROOT to: $SDK_PATH"
-            echo "Using clang: $CLANG_PATH"
-        else
-            echo "Warning: Could not find SDK path or clang for $SDK_NAME"
-        fi
-    fi
+    # iOS cross-compilation is now handled by .cargo/config.toml
     
     # Build with cargo
     cargo build --target "$TARGET" $CARGO_FLAGS
