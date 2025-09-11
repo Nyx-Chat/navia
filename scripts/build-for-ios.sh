@@ -133,14 +133,36 @@ for target_pair in "${TARGETS[@]}"; do
             SDK_NAME="iphoneos"
         fi
         
-        # Get the SDK path from xcrun
+        # Get the SDK path and set up environment
         SDK_PATH=$(xcrun --sdk "$SDK_NAME" --show-sdk-path)
+        CLANG_PATH=$(xcrun --sdk "$SDK_NAME" --find clang)
         
-        if [ -n "$SDK_PATH" ]; then
+        if [ -n "$SDK_PATH" ] && [ -n "$CLANG_PATH" ]; then
             export SDKROOT="$SDK_PATH"
+            
+            # Set up iOS-specific environment variables for this target
+            case "$TARGET" in
+                "aarch64-apple-ios")
+                    export CC_aarch64_apple_ios="$CLANG_PATH"
+                    export AR_aarch64_apple_ios="$(xcrun --sdk iphoneos --find ar)"
+                    export CARGO_TARGET_AARCH64_APPLE_IOS_LINKER="$CLANG_PATH"
+                    ;;
+                "x86_64-apple-ios")
+                    export CC_x86_64_apple_ios="$CLANG_PATH"
+                    export AR_x86_64_apple_ios="$(xcrun --sdk iphonesimulator --find ar)"
+                    export CARGO_TARGET_X86_64_APPLE_IOS_LINKER="$CLANG_PATH"
+                    ;;
+                "aarch64-apple-ios-sim")
+                    export CC_aarch64_apple_ios_sim="$CLANG_PATH"
+                    export AR_aarch64_apple_ios_sim="$(xcrun --sdk iphonesimulator --find ar)"
+                    export CARGO_TARGET_AARCH64_APPLE_IOS_SIM_LINKER="$CLANG_PATH"
+                    ;;
+            esac
+            
             echo "Setting SDKROOT to: $SDK_PATH"
+            echo "Using clang: $CLANG_PATH"
         else
-            echo "Warning: Could not find SDK path for $SDK_NAME"
+            echo "Warning: Could not find SDK path or clang for $SDK_NAME"
         fi
     fi
     
