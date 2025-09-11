@@ -127,17 +127,90 @@ for target_pair in "${TARGETS[@]}"; do
     # Build with cargo
     cargo build --target "$TARGET" $CARGO_FLAGS
     
-    # Store library path for lipo
-    LIB_PATH="target/$TARGET/$BUILD_MODE/libnavia_core.a"
+    # Determine the correct library extension based on build mode and target
+    if [ "$BUILD_MODE" = "release" ]; then
+        LIB_EXT="a"  # Static library for release
+    else
+        # For iOS targets, we need to check what actually gets built
+        if [ -f "target/$TARGET/$BUILD_MODE/libnavia_core.a" ]; then
+            LIB_EXT="a"
+        else
+            LIB_EXT="dylib"
+        fi
+    fi
+    
+    LIB_PATH="target/$TARGET/$BUILD_MODE/libnavia_core.$LIB_EXT"
+    
+    # Verify the library file exists
+    if [ ! -f "$LIB_PATH" ]; then
+        echo "ERROR: Expected library not found at $LIB_PATH"
+        echo "Available files in target/$TARGET/$BUILD_MODE/:"
+        ls -la "target/$TARGET/$BUILD_MODE/" | grep libnavia_core || echo "No libnavia_core files found"
+        exit 1
+    fi
+    
     BUILT_LIBS+=("$LIB_PATH")
 done
 
-# Create universal binary if we built multiple architectures
+# For iOS, we'll use the first built library for UniFFI generation
+# Multiple architectures will be handled at the XCFramework level
 if [ ${#BUILT_LIBS[@]} -gt 1 ]; then
-    echo -e "${YELLOW}Creating universal binary...${NC}"
+    # Check if we can create a universal binary by looking for compatible architectures
+    SIMULATOR_LIBS=()
+    DEVICE_LIBS=()
+    
+    for i in "${!TARGETS[@]}"; do
+        TARGET="${TARGETS[$i]%%:*}"
+        LIB="${BUILT_LIBS[$i]}"
+        
+        if [[ "$TARGET" == *"-sim" ]]; then
+            SIMULATOR_LIBS+=("$LIB")
+        else
+            DEVICE_LIBS+=("$LIB")
+        fi
+    done
+    
+    # Try to create universal binaries for simulator and device separately
     mkdir -p "target/universal/$BUILD_MODE"
-    lipo -create "${BUILT_LIBS[@]}" -output "target/universal/$BUILD_MODE/libnavia_core.a"
-    FINAL_LIB="target/universal/$BUILD_MODE/libnavia_core.a"
+    
+    # Use the same extension as the built libraries
+    if [ "$BUILD_MODE" = "release" ]; then
+        OUTPUT_EXT="a"
+    else
+        OUTPUT_EXT="$LIB_EXT"
+    fi
+    
+    # Create simulator universal binary if we have multiple simulator targets
+    if [ ${#SIMULATOR_LIBS[@]} -gt 1 ]; then
+        echo -e "${YELLOW}Creating universal simulator binary...${NC}"
+        lipo -create "${SIMULATOR_LIBS[@]}" -output "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT" 2>/dev/null || {
+            echo -e "${YELLOW}Cannot combine simulator libraries, using first one...${NC}"
+            cp "${SIMULATOR_LIBS[0]}" "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT"
+        }
+        # Store but don't use for UniFFI generation yet
+    elif [ ${#SIMULATOR_LIBS[@]} -eq 1 ]; then
+        cp "${SIMULATOR_LIBS[0]}" "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT"
+        # Store but don't use for UniFFI generation yet
+    fi
+    
+    # Create device universal binary if we have multiple device targets
+    if [ ${#DEVICE_LIBS[@]} -gt 1 ]; then
+        echo -e "${YELLOW}Creating universal device binary...${NC}"
+        lipo -create "${DEVICE_LIBS[@]}" -output "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT" 2>/dev/null || {
+            echo -e "${YELLOW}Cannot combine device libraries, using first one...${NC}"
+            cp "${DEVICE_LIBS[0]}" "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT"
+        }
+        # Use original device library for UniFFI generation to avoid metadata issues
+        FINAL_LIB="${DEVICE_LIBS[0]}"
+    elif [ ${#DEVICE_LIBS[@]} -eq 1 ]; then
+        cp "${DEVICE_LIBS[0]}" "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT"
+        FINAL_LIB="${DEVICE_LIBS[0]}"
+    fi
+    
+    # If we don't have a device library, use simulator for UniFFI generation
+    if [ -z "$FINAL_LIB" ] && [ -n "${SIMULATOR_LIBS[0]}" ]; then
+        FINAL_LIB="${SIMULATOR_LIBS[0]}"
+    fi
 else
     FINAL_LIB="${BUILT_LIBS[0]}"
 fi
