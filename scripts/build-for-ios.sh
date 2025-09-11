@@ -127,16 +127,16 @@ for target_pair in "${TARGETS[@]}"; do
     # Build with cargo
     cargo build --target "$TARGET" $CARGO_FLAGS
     
-    # Determine the correct library extension based on build mode and target
-    if [ "$BUILD_MODE" = "release" ]; then
-        LIB_EXT="a"  # Static library for release
+    # For iOS, we always get dylib from cdylib crate type
+    # Check what library file actually exists
+    if [ -f "target/$TARGET/$BUILD_MODE/libnavia_core.a" ]; then
+        LIB_EXT="a"
+    elif [ -f "target/$TARGET/$BUILD_MODE/libnavia_core.dylib" ]; then
+        LIB_EXT="dylib"
     else
-        # For iOS targets, we need to check what actually gets built
-        if [ -f "target/$TARGET/$BUILD_MODE/libnavia_core.a" ]; then
-            LIB_EXT="a"
-        else
-            LIB_EXT="dylib"
-        fi
+        echo "ERROR: No libnavia_core library found in target/$TARGET/$BUILD_MODE/"
+        ls -la "target/$TARGET/$BUILD_MODE/" | grep libnavia_core || echo "No libnavia_core files found"
+        exit 1
     fi
     
     LIB_PATH="target/$TARGET/$BUILD_MODE/libnavia_core.$LIB_EXT"
@@ -205,6 +205,15 @@ if [ ${#BUILT_LIBS[@]} -gt 1 ]; then
     elif [ ${#DEVICE_LIBS[@]} -eq 1 ]; then
         cp "${DEVICE_LIBS[0]}" "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT"
         FINAL_LIB="${DEVICE_LIBS[0]}"
+    fi
+    
+    # Create the main library for Xcode to find (use simulator for local dev, device for CI)
+    if [ -f "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT" ]; then
+        cp "target/universal/$BUILD_MODE/libnavia_core_sim.$OUTPUT_EXT" "target/universal/$BUILD_MODE/libnavia_core.$OUTPUT_EXT"
+        echo -e "${YELLOW}Created main library from simulator build${NC}"
+    elif [ -f "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT" ]; then
+        cp "target/universal/$BUILD_MODE/libnavia_core_device.$OUTPUT_EXT" "target/universal/$BUILD_MODE/libnavia_core.$OUTPUT_EXT"
+        echo -e "${YELLOW}Created main library from device build${NC}"
     fi
     
     # If we don't have a device library, use simulator for UniFFI generation

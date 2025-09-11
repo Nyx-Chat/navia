@@ -10,7 +10,7 @@
 		1D0E39CB2B5A7B8000F7A3D0 /* Navia.h in Headers */ = {isa = PBXBuildFile; fileRef = 1D0E39CA2B5A7B8000F7A3D0 /* Navia.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1D0E39D22B5A7B8000F7A3D0 /* Navia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D0E39C72B5A7B8000F7A3D0 /* Navia.framework */; };
 		1D0E39D72B5A7B8000F7A3D0 /* NaviaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0E39D62B5A7B8000F7A3D0 /* NaviaTests.swift */; };
-		1D0E39E22B5A7C0000F7A3D0 /* libnavia_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D0E39E12B5A7C0000F7A3D0 /* libnavia_core.a */; };
+		1D0E39E22B5A7C0000F7A3D0 /* libnavia_core.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D0E39E12B5A7C0000F7A3D0 /* libnavia_core.dylib */; };
 		1D0E39E42B5A7C1000F7A3D0 /* navia_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0E39E32B5A7C1000F7A3D0 /* navia_core.swift */; };
 		1D0E39E62B5A7C2000F7A3D0 /* navia_coreFFI.h in Headers */ = {isa = PBXBuildFile; fileRef = 1D0E39E52B5A7C2000F7A3D0 /* navia_coreFFI.h */; };
 /* End PBXBuildFile section */
@@ -30,7 +30,7 @@
 		1D0E39CA2B5A7B8000F7A3D0 /* Navia.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Navia.h; sourceTree = "<group>"; };
 		1D0E39D12B5A7B8000F7A3D0 /* NaviaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NaviaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D0E39D62B5A7B8000F7A3D0 /* NaviaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaviaTests.swift; sourceTree = "<group>"; };
-		1D0E39E12B5A7C0000F7A3D0 /* libnavia_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libnavia_core.a; path = ../rust/target/universal/release/libnavia_core.a; sourceTree = "<group>"; };
+		1D0E39E12B5A7C0000F7A3D0 /* libnavia_core.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libnavia_core.dylib; path = ../rust/target/universal/release/libnavia_core.dylib; sourceTree = "<group>"; };
 		1D0E39E32B5A7C1000F7A3D0 /* navia_core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = navia_core.swift; path = Generated/navia_core.swift; sourceTree = "<group>"; };
 		1D0E39E52B5A7C2000F7A3D0 /* navia_coreFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = navia_coreFFI.h; path = Generated/navia_coreFFI.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -40,7 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1D0E39E22B5A7C0000F7A3D0 /* libnavia_core.a in Frameworks */,
+				1D0E39E22B5A7C0000F7A3D0 /* libnavia_core.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -224,7 +224,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Build Rust library and generate Swift bindings\ncd \"$SRCROOT/../scripts\"\n./build-for-ios.sh --configuration \"$CONFIGURATION\"\n";
+			shellScript = "# Build Rust library and generate Swift bindings\ncd \"$SRCROOT/../scripts\"\n./build-for-ios.sh --configuration \"$CONFIGURATION\" --package\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -458,7 +458,7 @@
 			};
 			name = Release;
 		};
-		1D0E39DE2B5A7B8000F7A3D0 /* Debug */ = {
+		1D0E39E02B5A7B8000F7A3D0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
@@ -516,7 +516,7 @@
 		1D0E39DE2B5A7B8000F7A3D0 /* Build configuration list for PBXNativeTarget "NaviaTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				1D0E39DE2B5A7B8000F7A3D0 /* Debug */,
+				1D0E39E02B5A7B8000F7A3D0 /* Debug */,
 				1D0E39DF2B5A7B8000F7A3D0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
