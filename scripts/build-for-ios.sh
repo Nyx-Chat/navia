@@ -124,6 +124,26 @@ for target_pair in "${TARGETS[@]}"; do
     
     echo -e "${YELLOW}Building for $TARGET ($ARCH)...${NC}"
     
+    # Set up iOS cross-compilation environment
+    if [[ "$TARGET" == *"ios"* ]]; then
+        # Determine SDK path based on target
+        if [[ "$TARGET" == *"-sim" ]]; then
+            SDK_NAME="iphonesimulator"
+        else
+            SDK_NAME="iphoneos"
+        fi
+        
+        # Get the SDK path from xcrun
+        SDK_PATH=$(xcrun --sdk "$SDK_NAME" --show-sdk-path)
+        
+        if [ -n "$SDK_PATH" ]; then
+            export SDKROOT="$SDK_PATH"
+            echo "Setting SDKROOT to: $SDK_PATH"
+        else
+            echo "Warning: Could not find SDK path for $SDK_NAME"
+        fi
+    fi
+    
     # Build with cargo
     cargo build --target "$TARGET" $CARGO_FLAGS
     
