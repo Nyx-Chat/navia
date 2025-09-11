@@ -92,11 +92,12 @@ else
     fi
 fi
 
-# Install Rust targets
+# Install Rust targets for both stable and nightly toolchains
 echo -e "${YELLOW}Installing Rust targets...${NC}"
 for target_pair in "${TARGETS[@]}"; do
     TARGET="${target_pair%%:*}"
     rustup target add "$TARGET"
+    rustup target add --toolchain nightly "$TARGET"
 done
 
 # Build Rust library
