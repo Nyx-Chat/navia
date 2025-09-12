@@ -14,5 +14,5 @@ FOUNDATION_EXPORT double NaviaVersionNumber;
 //! Project version string for Navia.
 FOUNDATION_EXPORT const unsigned char NaviaVersionString[];
 
-// In this header, you should import all the public headers of your framework
-// FFI types are exposed through module maps, not umbrella header imports
+// Include FFI header for module verification
+#import <Navia/navia_coreFFI.h>

@@ -275,6 +275,15 @@ else
     exit 1
 fi
 
+# CRITICAL: Rename modulemap file for XCFramework compatibility
+if [ -f "$OUTPUT_DIR/navia_coreFFI.modulemap" ]; then
+    mv "$OUTPUT_DIR/navia_coreFFI.modulemap" "$OUTPUT_DIR/module.modulemap"
+    echo -e "${YELLOW}Modulemap renamed to module.modulemap for XCFramework compatibility${NC}"
+else
+    echo "ERROR: Modulemap generation failed!"
+    exit 1
+fi
+
 echo -e "${GREEN}✅ iOS build complete!${NC}"
 echo -e "${GREEN}Output: $OUTPUT_DIR${NC}"
 echo -e "${GREEN}Library: $FINAL_LIB${NC}"

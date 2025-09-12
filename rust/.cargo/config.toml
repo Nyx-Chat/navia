@@ -1,16 +1,14 @@
-[target.aarch64-linux-android]
-linker = "aarch64-linux-android21-clang"
-rustflags = [
-    "-C", "link-arg=-Wl,-z,max-page-size=16384",
-    "-C", "link-arg=-Wl,-z,common-page-size=4096",
-    "-C", "link-arg=-Wl,-z,separate-code",
-    "-C", "link-arg=-Wl,-z,separate-loadable-segments"
-]
+[unstable]
+target-applies-to-host = false
 
-[target.x86_64-linux-android]
-linker = "x86_64-linux-android21-clang"
-rustflags = [
-    "-C", "link-arg=-Wl,-z,common-page-size=4096",
-    "-C", "link-arg=-Wl,-z,separate-code",
-    "-C", "link-arg=-Wl,-z,separate-loadable-segments"
-]
+[target.aarch64-apple-ios]
+linker = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
+ar = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar"
+
+[target.x86_64-apple-ios]  
+linker = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
+ar = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar"
+
+[target.aarch64-apple-ios-sim]
+linker = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang" 
+ar = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar"
