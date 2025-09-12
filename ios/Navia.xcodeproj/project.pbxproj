@@ -442,8 +442,8 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/../rust/target/universal/debug",
 					"$(SRCROOT)/../rust/target/universal/release",
+					"$(SRCROOT)/../rust/target/universal/debug",
 				);
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
