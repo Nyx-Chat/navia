@@ -14,4 +14,5 @@ FOUNDATION_EXPORT double NaviaVersionNumber;
 //! Project version string for Navia.
 FOUNDATION_EXPORT const unsigned char NaviaVersionString[];
 
-// FFI header is imported through Swift module
+// Import generated FFI header
+#import "navia_coreFFI.h"
