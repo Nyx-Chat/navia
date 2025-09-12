@@ -73,23 +73,27 @@ for arg in "$@"; do
     shift || true
 done
 
-# In CI or when --all-architectures is passed, build everything
-if [ "$CI" = "true" ] || [ "$BUILD_ALL_ARCHS" = "true" ]; then
+# Determine targets based on Xcode SDK or build mode
+if [ -n "$SDKROOT" ]; then
+    # Called from Xcode - determine target based on SDK
+    echo -e "${YELLOW}Building from Xcode (SDK: $(basename $SDKROOT))${NC}"
+    if [[ "$SDKROOT" == *"iPhoneSimulator"* ]]; then
+        # iOS Simulator build (Apple Silicon only)
+        TARGETS=("aarch64-apple-ios-sim:arm64")
+    else
+        # iOS Device build
+        TARGETS=("aarch64-apple-ios:arm64")
+    fi
+elif [ "$CI" = "true" ] || [ "$BUILD_ALL_ARCHS" = "true" ]; then
     echo -e "${YELLOW}Building for ALL iOS architectures (CI/Release mode)${NC}"
     TARGETS=(
         "aarch64-apple-ios:arm64"           # iOS device
-        "x86_64-apple-ios:x86_64"           # iOS simulator (Intel)
         "aarch64-apple-ios-sim:arm64"       # iOS simulator (Apple Silicon)
     )
 else
-    # Local development - build for current architecture
+    # Local development - build for Apple Silicon simulator
     echo -e "${YELLOW}Building for local iOS development${NC}"
-    # Detect if we're on Apple Silicon or Intel Mac for simulator
-    if [[ $(uname -m) == "arm64" ]]; then
-        TARGETS=("aarch64-apple-ios-sim:arm64")  # Apple Silicon simulator
-    else
-        TARGETS=("x86_64-apple-ios:x86_64")      # Intel simulator
-    fi
+    TARGETS=("aarch64-apple-ios-sim:arm64")
 fi
 
 # Install Rust targets for both stable and nightly toolchains

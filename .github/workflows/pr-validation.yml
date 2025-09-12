@@ -162,7 +162,7 @@ jobs:
         run: |
           cd ios
           xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos build
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator build
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator -arch arm64 build
       
       - name: Run iOS tests
         run: |
