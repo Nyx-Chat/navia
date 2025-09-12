@@ -15,4 +15,4 @@ FOUNDATION_EXPORT double NaviaVersionNumber;
 FOUNDATION_EXPORT const unsigned char NaviaVersionString[];
 
 // Import generated FFI header
-#import "navia_coreFFI.h"
+#import <navia_coreFFI.h>
