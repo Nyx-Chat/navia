@@ -13,6 +13,3 @@ FOUNDATION_EXPORT double NaviaVersionNumber;
 
 //! Project version string for Navia.
 FOUNDATION_EXPORT const unsigned char NaviaVersionString[];
-
-// Include FFI header for module verification
-#import <Navia/navia_coreFFI.h>
