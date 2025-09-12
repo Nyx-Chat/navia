@@ -275,12 +275,21 @@ else
     exit 1
 fi
 
-# CRITICAL: Rename modulemap file for XCFramework compatibility
+# CRITICAL: Replace UniFFI modulemap with proper iOS framework structure
 if [ -f "$OUTPUT_DIR/navia_coreFFI.modulemap" ]; then
-    mv "$OUTPUT_DIR/navia_coreFFI.modulemap" "$OUTPUT_DIR/module.modulemap"
-    echo -e "${YELLOW}Modulemap renamed to module.modulemap for XCFramework compatibility${NC}"
+    # Remove the UniFFI-generated modulemap
+    rm "$OUTPUT_DIR/navia_coreFFI.modulemap"
+    
+    # Create simplified modulemap compatible with UniFFI
+    cat > "$OUTPUT_DIR/module.modulemap" << 'EOF'
+module navia_coreFFI {
+    header "navia_coreFFI.h"
+    export *
+}
+EOF
+    echo -e "${YELLOW}Generated simplified modulemap compatible with UniFFI${NC}"
 else
-    echo "ERROR: Modulemap generation failed!"
+    echo "ERROR: UniFFI modulemap generation failed!"
     exit 1
 fi
 
