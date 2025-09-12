@@ -167,7 +167,7 @@ jobs:
       - name: Run iOS tests
         run: |
           cd ios
-          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 15' test
+          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' test
 
   # Android build - run in parallel with iOS build
   android-build:
