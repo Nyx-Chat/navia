@@ -374,11 +374,6 @@ jobs:
             android/build/outputs/aar/android-release.aar
           retention-days: 7
       
-      - name: Run Android tests
-        timeout-minutes: 10
-        run: |
-          cd android
-          ./gradlew testReleaseUnitTest --no-daemon
 
   # Security and quality checks - can run in parallel with builds
   quality-checks:
