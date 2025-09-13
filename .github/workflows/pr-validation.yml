@@ -321,6 +321,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+        with:
+          targets: aarch64-linux-android x86_64-linux-android
+      
       - name: Setup Android Environment
         uses: ./.github/actions/setup-android-env
       
