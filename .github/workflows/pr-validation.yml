@@ -13,10 +13,46 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Detect which parts of the codebase changed
+  changes:
+    name: Detect Changes
+    runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
+    outputs:
+      rust: ${{ steps.changes.outputs.rust }}
+      ios: ${{ steps.changes.outputs.ios }}
+      android: ${{ steps.changes.outputs.android }}
+      docs: ${{ steps.changes.outputs.docs }}
+      workflows: ${{ steps.changes.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            rust:
+              - 'rust/**'
+              - 'scripts/build-for-*.sh'
+              - 'scripts/verify-*.sh'
+            ios:
+              - 'ios/**'
+              - 'Navia.podspec'
+            android:
+              - 'android/**'
+            docs:
+              - '**/*.md'
+              - 'docs/**'
+            workflows:
+              - '.github/**'
+
   # Quick checks that should fail fast
   quick-checks:
     name: Quick Checks
     runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,7 +84,8 @@ jobs:
   rust-tests:
     name: Rust Tests
     runs-on: runs-on=${{ github.run_id }}/runner=4cpu-linux-x64
-    needs: quick-checks
+    needs: [changes, quick-checks]
+    if: needs.changes.outputs.rust == 'true' && !cancelled() && !failure()
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,11 +106,22 @@ jobs:
           cd rust/navia-core
           cargo test --doc
 
-  # iOS build - run in parallel with Android build
+  # iOS build - run in parallel with Android build using matrix strategy
   ios-build:
-    name: iOS Build
+    name: iOS Build (${{ matrix.target }})
     runs-on: macos-15
-    needs: quick-checks
+    needs: [changes, quick-checks]
+    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true') && !cancelled() && !failure()
+    strategy:
+      matrix:
+        target: [aarch64-apple-ios, aarch64-apple-ios-sim]
+        include:
+          - target: aarch64-apple-ios
+            sdk: iphoneos
+            config: Release-iphoneos
+          - target: aarch64-apple-ios-sim
+            sdk: iphonesimulator
+            config: Release-iphonesimulator
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,20 +132,66 @@ jobs:
         env:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: ${{ matrix.target }}
       
-      - name: Build Rust libraries for iOS
+      - name: Build Rust library for iOS (${{ matrix.target }})
         run: |
-          cd scripts
-          ./build-for-ios.sh --package
+          cd rust/navia-core
+          cargo build --release --target ${{ matrix.target }}
       
-      - name: Build iOS framework
+      - name: Build iOS framework (${{ matrix.sdk }})
         run: |
           cd ios
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData build
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator -arch arm64 -derivedDataPath build/DerivedData build
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk ${{ matrix.sdk }} -arch arm64 -derivedDataPath build/DerivedData build
       
-      - name: Upload iOS artifacts
+      - name: Upload iOS artifacts (${{ matrix.target }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-${{ matrix.target }}
+          path: |
+            rust/target/${{ matrix.target }}/release/libnavia_core.a
+            ios/build/DerivedData/Build/Products/${{ matrix.config }}/Navia.framework/
+          retention-days: 7
+
+  # Collect iOS artifacts and run tests
+  ios-package:
+    name: iOS Package & Test
+    runs-on: macos-15
+    needs: [changes, ios-build]
+    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true') && !cancelled() && !failure()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Download iOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ios-*
+          path: ./ios-artifacts/
+          merge-multiple: true
+      
+      - name: Setup iOS artifacts structure
+        run: |
+          # Create directory structure
+          mkdir -p rust/target/aarch64-apple-ios/release
+          mkdir -p rust/target/aarch64-apple-ios-sim/release
+          mkdir -p ios/build/DerivedData/Build/Products/Release-iphoneos
+          mkdir -p ios/build/DerivedData/Build/Products/Release-iphonesimulator
+          
+          # Copy Rust libraries
+          find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios/release*" -exec cp {} rust/target/aarch64-apple-ios/release/ \;
+          find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios-sim/release*" -exec cp {} rust/target/aarch64-apple-ios-sim/release/ \;
+          
+          # Copy frameworks
+          find ios-artifacts -name "Navia.framework" -path "*Release-iphoneos*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphoneos/ \;
+          find ios-artifacts -name "Navia.framework" -path "*Release-iphonesimulator*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphonesimulator/ \;
+          
+          # Verify artifacts
+          ls -la rust/target/*/release/
+          ls -la ios/build/DerivedData/Build/Products/*/
+      
+      - name: Upload final iOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ios-build-artifacts
@@ -111,13 +205,23 @@ jobs:
       - name: Run iOS tests
         run: |
           cd ios
-          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' test
+          # Use any available iPhone simulator
+          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,OS=latest' test
 
-  # Android build - run in parallel with iOS build
+  # Android build - run in parallel with iOS build using matrix strategy
   android-build:
-    name: Android Build
-    runs-on: runs-on=${{ github.run_id }}/runner=8cpu-linux-x64
-    needs: quick-checks
+    name: Android Build (${{ matrix.arch }})
+    runs-on: runs-on=${{ github.run_id }}/runner=4cpu-linux-x64
+    needs: [changes, quick-checks]
+    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.android == 'true') && !cancelled() && !failure()
+    strategy:
+      matrix:
+        arch: [arm64-v8a, x86_64]
+        include:
+          - arch: arm64-v8a
+            target: aarch64-linux-android
+          - arch: x86_64  
+            target: x86_64-linux-android
     steps:
       - name: Free up disk space
         run: |
@@ -137,44 +241,99 @@ jobs:
         env:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
-          targets: aarch64-linux-android,x86_64-linux-android
+          targets: ${{ matrix.target }}
       
       - name: Setup Android Environment
         uses: ./.github/actions/setup-android-env
       
       # Build tools are included in the NDK
       
-      - name: Build Rust libraries for Android
+      - name: Build Rust libraries for Android (${{ matrix.arch }})
         run: |
           # Kill the annoying RUSTFLAGS that break everything
           unset RUSTFLAGS
-          export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=4096 -C link-arg=-Wl,-z,separate-code -C link-arg=-Wl,-z,separate-loadable-segments"
-          cd scripts
-          ./build-for-android.sh --package
+          # Set 16KB alignment flags only for arm64
+          if [ "${{ matrix.arch }}" = "arm64-v8a" ]; then
+            export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=4096 -C link-arg=-Wl,-z,separate-code -C link-arg=-Wl,-z,separate-loadable-segments"
+          fi
           
-      - name: Verify 16KB alignment
+          # Build for specific target
+          cd rust/navia-core
+          cargo build --release --target ${{ matrix.target }}
+          
+          # Copy to expected location for packaging
+          mkdir -p ../../android/src/main/jniLibs/${{ matrix.arch }}
+          cp ../target/${{ matrix.target }}/release/libnavia_core.so ../../android/src/main/jniLibs/${{ matrix.arch }}/
+          
+      - name: Verify 16KB alignment (${{ matrix.arch }})
         run: |
-          echo "Verifying 16KB alignment for Android 15+ compatibility..."
-          # The build script already applies alignment, just verify
-          for arch in arm64-v8a x86_64; do
-            lib="android/src/main/jniLibs/$arch/libnavia_core.so"
-            if [ -f "$lib" ]; then
-              echo "Checking $arch..."
-              ./scripts/verify-16kb-alignment.sh "$lib" || {
-                echo "Note: Alignment warnings are expected until proper fix is applied"
-                true  # Don't fail the build
-              }
+          echo "Verifying 16KB alignment for ${{ matrix.arch }}..."
+          lib="android/src/main/jniLibs/${{ matrix.arch }}/libnavia_core.so"
+          if [ -f "$lib" ]; then
+            echo "Checking ${{ matrix.arch }}..."
+            ./scripts/verify-16kb-alignment.sh "$lib" || {
+              echo "Note: Alignment warnings are expected until proper fix is applied"
+              true  # Don't fail the build
+            }
+          else
+            echo "❌ Library not found at $lib"
+            exit 1
+          fi
+      
+      - name: Upload Android artifact (${{ matrix.arch }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lib-${{ matrix.arch }}
+          path: android/src/main/jniLibs/${{ matrix.arch }}/libnavia_core.so
+          retention-days: 7
+
+  # Collect Android artifacts and build final AAR
+  android-package:
+    name: Android Package & Test
+    runs-on: runs-on=${{ github.run_id }}/runner=4cpu-linux-x64
+    needs: [changes, android-build]
+    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.android == 'true') && !cancelled() && !failure()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Android Environment
+        uses: ./.github/actions/setup-android-env
+      
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: android-lib-*
+          path: ./android-libs/
+          merge-multiple: true
+      
+      - name: Setup Android library structure
+        run: |
+          # Create directory structure
+          mkdir -p android/src/main/jniLibs/arm64-v8a
+          mkdir -p android/src/main/jniLibs/x86_64
+          
+          # Copy artifacts to correct locations
+          find android-libs -name "libnavia_core.so" | while read lib; do
+            if [[ "$lib" == *"arm64-v8a"* ]]; then
+              cp "$lib" android/src/main/jniLibs/arm64-v8a/
+            elif [[ "$lib" == *"x86_64"* ]]; then
+              cp "$lib" android/src/main/jniLibs/x86_64/
             fi
           done
+          
+          # Verify libraries are in place
+          ls -la android/src/main/jniLibs/*/
       
-      - name: Build Android library
+      - name: Build Android AAR
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon
           # Ensure all processes complete
           sleep 5
       
-      - name: Upload Android artifacts
+      - name: Upload final Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-build-artifacts
@@ -184,27 +343,18 @@ jobs:
             android/build/outputs/aar/android-release.aar
           retention-days: 7
       
-      - name: Clean up before tests
-        run: |
-          # Clean up build artifacts to free space
-          cd android
-          ./gradlew clean --no-daemon
-          cd ../rust
-          rm -rf target/release/build
-          rm -rf target/release/deps
-          df -h
-      
       - name: Run Android tests
         timeout-minutes: 10
         run: |
           cd android
           ./gradlew testReleaseUnitTest --no-daemon
 
-  # Security and quality checks - can run slower
+  # Security and quality checks - can run in parallel with builds
   quality-checks:
     name: Quality Checks
     runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
-    needs: quick-checks
+    needs: [changes, quick-checks]
+    if: needs.changes.outputs.rust == 'true' && !cancelled() && !failure()
     steps:
       - uses: actions/checkout@v4
         with:
