@@ -165,7 +165,7 @@ jobs:
       # Android build and publish
       - name: Setup JDK
         if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
