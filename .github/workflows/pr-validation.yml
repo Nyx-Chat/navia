@@ -94,8 +94,19 @@ jobs:
       - name: Build iOS framework
         run: |
           cd ios
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos build
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator -arch arm64 build
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos -derivedDataPath build/DerivedData build
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator -arch arm64 -derivedDataPath build/DerivedData build
+      
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-artifacts
+          path: |
+            rust/target/aarch64-apple-ios/release/libnavia_core.a
+            rust/target/aarch64-apple-ios-sim/release/libnavia_core.a
+            ios/build/DerivedData/Build/Products/Release-iphoneos/Navia.framework/
+            ios/build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework/
+          retention-days: 7
       
       - name: Run iOS tests
         run: |
@@ -162,6 +173,16 @@ jobs:
           ./gradlew assembleRelease --no-daemon
           # Ensure all processes complete
           sleep 5
+      
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-artifacts
+          path: |
+            android/src/main/jniLibs/arm64-v8a/libnavia_core.so
+            android/src/main/jniLibs/x86_64/libnavia_core.so
+            android/build/outputs/aar/android-release.aar
+          retention-days: 7
       
       - name: Clean up before tests
         run: |

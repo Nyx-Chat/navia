@@ -56,22 +56,29 @@ jobs:
             echo "Tag ${{ steps.get_version.outputs.VERSION }} does not exist"
           fi
 
-      - name: Setup Rust
+      - name: Download Android artifacts from PR validation
         if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: dawidd6/action-download-artifact@v6
         with:
-          toolchain: stable
+          workflow: pr-validation.yml
+          workflow_conclusion: success
+          name: android-build-artifacts
+          path: ./android-artifacts/
 
-      - name: Add Android targets (needed for Cargo.lock)
+      - name: Setup Android artifacts
         if: steps.check_tag.outputs.EXISTS == 'false'
-        run: rustup target add aarch64-linux-android x86_64-linux-android
-
-      # Skip tests - they already passed in PR validation
-      - name: Build release
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        working-directory: rust
         run: |
-          cargo build --release
+          # Create directory structure and copy artifacts
+          mkdir -p android/src/main/jniLibs/arm64-v8a
+          mkdir -p android/src/main/jniLibs/x86_64
+          mkdir -p android/build/outputs/aar
+          
+          # Copy artifacts to expected locations
+          cp android-artifacts/android/src/main/jniLibs/arm64-v8a/libnavia_core.so android/src/main/jniLibs/arm64-v8a/
+          cp android-artifacts/android/src/main/jniLibs/x86_64/libnavia_core.so android/src/main/jniLibs/x86_64/
+          cp android-artifacts/android/build/outputs/aar/android-release.aar android/build/outputs/aar/
+          
+          echo "✅ Android artifacts downloaded and positioned"
 
       - name: Create and push tag
         if: steps.check_tag.outputs.EXISTS == 'false'
@@ -89,22 +96,16 @@ jobs:
 
       - name: Build release artifacts
         if: steps.check_tag.outputs.EXISTS == 'false'
-        working-directory: rust
         run: |
-          # Build for multiple targets if needed
-          cargo build --release --target x86_64-unknown-linux-gnu
+          # Create artifacts directory and use cached Android artifacts
+          mkdir -p artifacts
           
-          # Create artifacts directory
-          mkdir -p ../artifacts
-          
-          # Copy built artifacts
-          cp target/x86_64-unknown-linux-gnu/release/libnavia_core.so ../artifacts/ || true
-          cp target/x86_64-unknown-linux-gnu/release/libnavia_core.a ../artifacts/ || true
-          
-          # Note: Kotlin bindings are generated during Android build process
+          # Copy Android artifacts to release directory  
+          cp android/src/main/jniLibs/arm64-v8a/libnavia_core.so artifacts/ || true
+          cp android/src/main/jniLibs/x86_64/libnavia_core.so artifacts/libnavia_core_x86_64.so || true
           
           # Create archive
-          cd ../artifacts
+          cd artifacts
           tar -czf navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz *
 
       - name: Create GitHub Release
@@ -162,72 +163,18 @@ jobs:
           asset_name: navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
           asset_content_type: application/gzip
 
-      # Android build and publish
-      - name: Setup JDK
+      # Android publish using cached artifacts
+      - name: Setup Android Environment  
         if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+        uses: ./.github/actions/setup-android-env
 
-      - name: Install system dependencies
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
-      
-      - name: Setup Android SDK
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: android-actions/setup-android@v3
-      
-      - name: Install Android SDK build-tools
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        run: |
-          sdkmanager --install "build-tools;34.0.0"
-          echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
-
-      - name: Setup Android NDK
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r28c
-          add-to-path: true
-        id: setup-ndk
-      
-      - name: Set Android NDK environment
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        run: |
-          echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
-          echo "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
-
-      # Build tools are included in the NDK
-      # Note: Android targets already added earlier
-
-      - name: Clean up before Android build
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        run: |
-          # Remove Linux build artifacts to free space
-          rm -rf rust/target/release
-          rm -rf rust/target/x86_64-unknown-linux-gnu
-          df -h
-
-      - name: Build Rust libraries for Android
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        run: |
-          # Kill the annoying RUSTFLAGS that break everything
-          unset RUSTFLAGS
-          export CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384 -C link-arg=-Wl,-z,common-page-size=4096 -C link-arg=-Wl,-z,separate-code -C link-arg=-Wl,-z,separate-loadable-segments"
-          cd scripts
-          ./build-for-android.sh --package
-          
       - name: Verify 16KB alignment
         if: steps.check_tag.outputs.EXISTS == 'false'
         run: |
           echo "Verifying 16KB alignment for Android 15+ compatibility..."
           ./scripts/verify-16kb-alignment.sh android/src/main/jniLibs/arm64-v8a/libnavia_core.so
 
-      - name: Build and publish Android AAR
+      - name: Publish Android AAR using cached artifacts
         if: steps.check_tag.outputs.EXISTS == 'false'
         run: |
           cd android
@@ -248,11 +195,6 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Setup Rust Environment
-        uses: ./.github/actions/setup-rust-env
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-
       - name: Get version from Cargo.toml
         id: get_version
         run: |
@@ -261,27 +203,31 @@ jobs:
           echo "RAW_VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected version: v$VERSION"
 
-      - name: Setup Rust Environment
-        uses: ./.github/actions/setup-rust-env
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      - name: Download iOS artifacts from PR validation
+        uses: dawidd6/action-download-artifact@v6
         with:
-          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+          workflow: pr-validation.yml
+          workflow_conclusion: success
+          name: ios-build-artifacts
+          path: ./ios-artifacts/
 
-      - name: Build Rust libraries for iOS
+      - name: Setup iOS artifacts
         run: |
-          cd scripts
-          ./build-for-ios.sh --package
-
-      - name: Build iOS framework for device and simulator
-        run: |
-          cd ios
+          # Create directory structure
+          mkdir -p rust/target/aarch64-apple-ios/release
+          mkdir -p rust/target/aarch64-apple-ios-sim/release
+          mkdir -p ios/build/DerivedData/Build/Products/Release-iphoneos
+          mkdir -p ios/build/DerivedData/Build/Products/Release-iphonesimulator
           
-          # Build for device (arm64) - output to build directory
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos -arch arm64 -derivedDataPath build/DerivedData build
+          # Copy Rust library artifacts
+          cp ios-artifacts/rust/target/aarch64-apple-ios/release/libnavia_core.a rust/target/aarch64-apple-ios/release/
+          cp ios-artifacts/rust/target/aarch64-apple-ios-sim/release/libnavia_core.a rust/target/aarch64-apple-ios-sim/release/
           
-          # Build for simulator (arm64 only) - output to build directory  
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator -arch arm64 -derivedDataPath build/DerivedData build
+          # Copy iOS framework artifacts
+          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphoneos/Navia.framework ios/build/DerivedData/Build/Products/Release-iphoneos/
+          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework ios/build/DerivedData/Build/Products/Release-iphonesimulator/
+          
+          echo "✅ iOS artifacts downloaded and positioned"
 
       - name: Create XCFramework
         run: |
