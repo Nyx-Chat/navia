@@ -1,38 +1,51 @@
-# Navia - DIDComm Messaging Library for Android
+# Navia - DIDComm Messaging Library for Mobile
 
-Navia is a high-performance DIDComm v2 messaging library for Android, built with Rust and exposed to Kotlin/Java through UniFFI bindings. It provides secure, encrypted peer-to-peer messaging capabilities using the DIDComm protocol.
+Navia is a high-performance DIDComm v2 messaging library for Android and iOS, built with Rust and exposed to Kotlin/Swift through UniFFI bindings. It provides secure, encrypted peer-to-peer messaging capabilities using the DIDComm protocol.
 
 ## Features
 
-- 🚀 **Pure UniFFI/JNA** - No JNI complexity, automatic Rust async → Kotlin suspend function conversion
+- 🚀 **Pure UniFFI** - No JNI/FFI complexity, automatic Rust async → Kotlin/Swift async conversion
 - 🔐 **DIDComm v2 Protocol** - Full implementation with encryption and authentication
-- 📦 **Native Kotlin Types** - Structured data types, no JSON string manipulation required
+- 📦 **Native Types** - Structured data types for Kotlin/Swift, no JSON string manipulation required
 - ⚡ **Async/Await Support** - Non-blocking operations throughout
 - 🗄️ **Aries Askar Storage** - Secure key management and storage
-- 📱 **Android 15+ Ready** - Full 16KB page size support for future Android devices
+- 📱 **Mobile Ready** - Android 15+ (16KB pages) and iOS 13+ support
 
 ## Documentation
 
-- 📱 [Android Integration Guide](ANDROID_INTEGRATION.md) - Complete Android setup and usage
+- 📱 [Android Integration Guide](docs/ANDROID_INTEGRATION.md) - Complete Android setup and usage
+- 🍎 [iOS Integration Guide](docs/IOS_INTEGRATION.md) - Complete iOS setup and usage
 - 📚 [API Reference](docs/API.md) - Comprehensive API documentation and patterns
 - 🔧 [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
-- ⚠️ Error Handling - Error handling patterns for mobile apps
+- ⚠️ [Error Handling](docs/ERROR_HANDLING.md) - Error handling patterns for mobile apps
 - 💡 [Examples](examples/) - Runnable code examples
 
 ## Quick Start
 
 ### Installation
 
+#### Android
+
 Add to your app's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.nyx:navia:1.1.2")
-    implementation("net.java.dev.jna:jna:5.13.0@aar")
+    implementation("com.nyx:navia:1.1.28")
+    implementation("net.java.dev.jna:jna:5.17.0@aar")
 }
 ```
 
+#### iOS
+
+Add to your `Podfile`:
+
+```ruby
+pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.1.28'
+```
+
 ### Basic Usage
+
+#### Android (Kotlin)
 
 ```kotlin
 import uniffi.navia_core.*
@@ -60,21 +73,54 @@ val message = DidCommMessage(
 val encrypted = didcomm.pack(message, myDid, recipientDid)
 ```
 
-For detailed integration instructions, see the [Android Integration Guide](ANDROID_INTEGRATION.md).
+#### iOS (Swift)
+
+```swift
+import Navia
+
+// Initialize
+let didcomm = DidComInterface(path: "")
+let seed = generateSecure32ByteSeed()
+try await didcomm.open(path: "/path/to/database", seed: seed)
+
+// Generate DID
+let myDid = try await didcomm.generateDid(
+    uri: "https://example.com/didcomm",
+    routingKeys: []
+)
+
+// Send encrypted message
+let message = DIDCommMessage(
+    id: UUID().uuidString,
+    msgType: "https://didcomm.org/basicmessage/2.0/message",
+    body: #"{"content": "Hello, secure world!"}"#,
+    from: myDid,
+    to: [recipientDid]
+)
+
+let encrypted = try await didcomm.pack(msg: message, from: myDid, to: recipientDid)
+```
+
+For detailed integration instructions, see the [Android Integration Guide](docs/ANDROID_INTEGRATION.md) or [iOS Integration Guide](docs/IOS_INTEGRATION.md).
 
 ## Building from Source
 
 ### Prerequisites
 
-1. **Rust toolchain** with Android targets:
+1. **Rust toolchain** with mobile targets:
 ```bash
-rustup target add aarch64-linux-android armv7-linux-androideabi \
-    i686-linux-android x86_64-linux-android
+# Android targets
+rustup target add aarch64-linux-android x86_64-linux-android
+
+# iOS targets (macOS only)
+rustup target add aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim
 ```
 
-2. **Android NDK r27c or r28** (required for 16KB page size support)
-   - Set `ANDROID_NDK_ROOT` or install in standard location
-   - ⚠️ **Important**: NDK r27+ is required for Android 15+ compatibility
+2. **Platform-specific tools**:
+   - **Android**: NDK r27c or r28 (required for 16KB page size support)
+     - Set `ANDROID_NDK_ROOT` or install in standard location
+     - ⚠️ **Important**: NDK r27+ is required for Android 15+ compatibility
+   - **iOS**: Xcode 15+ with command line tools (macOS only)
 
 ### Build Process
 
@@ -83,13 +129,21 @@ rustup target add aarch64-linux-android armv7-linux-androideabi \
 git clone https://github.com/Nyx-Chat/navia.git
 cd navia
 
-# Build for all Android architectures
+# Build for Android (all architectures)
 cd scripts
 ./build-for-android.sh --package
+
+# Build for iOS (macOS only, all architectures)
+./build-for-ios.sh --package
+
+# Or use Make
+cd ..
+make build-android  # Builds Android package
+make build-ios      # Builds iOS package
 ```
 
 Build modes:
-- **Local** (default): Builds only for connected device/emulator
+- **Local** (default): Builds only for current architecture (connected device/simulator)
 - **All** (`--all`): Builds for all architectures locally
 - **Package** (`--package`): Full build for distribution
 

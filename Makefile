@@ -1,4 +1,4 @@
-.PHONY: setup dev test build-android fmt clean help
+.PHONY: setup dev test build-android build-ios fmt clean help
 
 # Default target
 all: setup
@@ -10,6 +10,7 @@ help:
 	@echo "  make dev         - Start development (setup + check)"
 	@echo "  make test        - Run all tests"
 	@echo "  make build-android - Build for Android (all architectures)"
+	@echo "  make build-ios    - Build for iOS (all architectures)"
 	@echo "  make fmt         - Format all code"
 	@echo "  make clean       - Clean build artifacts"
 
@@ -32,6 +33,10 @@ test:
 build-android:
 	@cd scripts && ./build-for-android.sh --package
 
+## Build for iOS
+build-ios:
+	@cd scripts && ./build-for-ios.sh --package
+
 ## Format code
 fmt:
 	@cd rust/navia-core && cargo fmt
@@ -40,4 +45,6 @@ fmt:
 clean:
 	@cd rust && cargo clean
 	@rm -rf android/build
+	@rm -rf ios/build
+	@rm -rf ios/Navia/Generated/*
 	@echo "✅ Clean complete!"

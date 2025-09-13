@@ -1,0 +1,4 @@
+module navia_coreFFI {
+    header "navia_coreFFI.h"
+    export *
+}
