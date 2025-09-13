@@ -206,8 +206,8 @@ jobs:
       - name: Run iOS tests
         run: |
           cd ios
-          # Use any available iPhone simulator
-          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,OS=latest' test
+          # Use a specific iPhone simulator (iPhone 16 with OS 18.6)
+          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' test
 
   # Android build - run in parallel with iOS build using matrix strategy
   android-build:

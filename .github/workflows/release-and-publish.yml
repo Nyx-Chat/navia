@@ -238,19 +238,35 @@ jobs:
           mkdir -p ios/build/DerivedData/Build/Products/Release-iphoneos
           mkdir -p ios/build/DerivedData/Build/Products/Release-iphonesimulator
           
-          # Copy Rust library artifacts with fallback search
-          cp ios-artifacts/rust/target/aarch64-apple-ios/release/libnavia_core.a rust/target/aarch64-apple-ios/release/ || \
-            find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios/release*" -exec cp {} rust/target/aarch64-apple-ios/release/ \;
+          # Copy Rust library artifacts with enhanced fallback search
+          find ios-artifacts -name "libnavia_core.a" | while read lib; do
+            echo "Found library: $lib"
+            if [[ "$lib" == *"aarch64-apple-ios-sim"* ]]; then
+              echo "Copying to iOS simulator target..."
+              cp "$lib" rust/target/aarch64-apple-ios-sim/release/
+            elif [[ "$lib" == *"aarch64-apple-ios"* ]]; then
+              echo "Copying to iOS device target..."
+              cp "$lib" rust/target/aarch64-apple-ios/release/
+            fi
+          done
           
-          cp ios-artifacts/rust/target/aarch64-apple-ios-sim/release/libnavia_core.a rust/target/aarch64-apple-ios-sim/release/ || \
-            find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios-sim/release*" -exec cp {} rust/target/aarch64-apple-ios-sim/release/ \;
+          # Copy iOS framework artifacts with enhanced fallback search
+          find ios-artifacts -name "Navia.framework" | while read framework; do
+            echo "Found framework: $framework"
+            if [[ "$framework" == *"Release-iphoneos"* ]]; then
+              echo "Copying to iOS device framework..."
+              cp -r "$framework" ios/build/DerivedData/Build/Products/Release-iphoneos/
+            elif [[ "$framework" == *"Release-iphonesimulator"* ]]; then
+              echo "Copying to iOS simulator framework..."
+              cp -r "$framework" ios/build/DerivedData/Build/Products/Release-iphonesimulator/
+            fi
+          done
           
-          # Copy iOS framework artifacts with fallback search
-          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphoneos/Navia.framework ios/build/DerivedData/Build/Products/Release-iphoneos/ || \
-            find ios-artifacts -name "Navia.framework" -path "*Release-iphoneos*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphoneos/ \;
-            
-          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework ios/build/DerivedData/Build/Products/Release-iphonesimulator/ || \
-            find ios-artifacts -name "Navia.framework" -path "*Release-iphonesimulator*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphonesimulator/ \;
+          # Verify artifacts are in place
+          echo "=== Rust libraries after setup ==="
+          ls -la rust/target/*/release/ || echo "No Rust libraries found"
+          echo "=== iOS frameworks after setup ==="
+          ls -la ios/build/DerivedData/Build/Products/*/ || echo "No iOS frameworks found"
           
           echo "✅ iOS artifacts downloaded and positioned"
 
