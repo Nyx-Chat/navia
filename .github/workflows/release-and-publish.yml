@@ -32,12 +32,10 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Configure git for private repos
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
 
       - name: Get version from Cargo.toml
         id: get_version
@@ -250,12 +248,10 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Configure git for private repos
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
 
       - name: Get version from Cargo.toml
         id: get_version
@@ -265,26 +261,12 @@ jobs:
           echo "RAW_VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected version: v$VERSION"
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
-      
-      - name: Setup cargo config for git authentication
-        run: |
-          # Create a git credential helper script
-          cat > ~/git-askpass.sh << 'EOF'
-          #!/bin/bash
-          case "$1" in
-            Username*) echo "x-access-token" ;;
-            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
-          esac
-          EOF
-          chmod +x ~/git-askpass.sh
-          
-          # Set git to use our credential helper
-          echo "GIT_ASKPASS=$HOME/git-askpass.sh" >> $GITHUB_ENV
-          echo "GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
 
       - name: Build Rust libraries for iOS
         run: |
@@ -295,20 +277,24 @@ jobs:
         run: |
           cd ios
           
-          # Build for device (arm64)
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos -arch arm64 build
+          # Build for device (arm64) - output to build directory
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphoneos -arch arm64 -derivedDataPath build/DerivedData build
           
-          # Build for simulator (arm64 only)
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator -arch arm64 build
+          # Build for simulator (arm64 only) - output to build directory  
+          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk iphonesimulator -arch arm64 -derivedDataPath build/DerivedData build
 
       - name: Create XCFramework
         run: |
           cd ios
           
+          # Verify framework paths exist
+          ls -la build/DerivedData/Build/Products/Release-iphoneos/ || echo "Device build not found"
+          ls -la build/DerivedData/Build/Products/Release-iphonesimulator/ || echo "Simulator build not found"
+          
           # Create XCFramework combining device and simulator builds
           xcodebuild -create-xcframework \
-            -framework build/Release-iphoneos/Navia.framework \
-            -framework build/Release-iphonesimulator/Navia.framework \
+            -framework build/DerivedData/Build/Products/Release-iphoneos/Navia.framework \
+            -framework build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework \
             -output Navia.xcframework
           
           # Archive the XCFramework

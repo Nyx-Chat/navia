@@ -1,0 +1,39 @@
+name: 'Setup Android Environment'
+description: 'Setup Android SDK, NDK, and dependencies'
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev pkg-config
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: Install Android SDK build-tools
+      shell: bash
+      run: |
+        sdkmanager --install "build-tools;34.0.0"
+        echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
+    
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r28c
+        add-to-path: true
+      id: setup-ndk
+    
+    - name: Set Android NDK environment
+      shell: bash
+      run: |
+        echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+        echo "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH

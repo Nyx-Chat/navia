@@ -22,28 +22,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Configure git for private repos
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
-          
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
           components: rustfmt, clippy
-      
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Check formatting
         run: |
@@ -70,26 +54,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Configure git for private repos
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
-          
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       
       - name: Run tests
         run: |
@@ -111,47 +79,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Configure git for private repos
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          echo "Configured git to use PAT for authentication"
-      
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
-      
-      - name: Setup cargo config for git authentication
-        run: |
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
-          
-          # Create a git credential helper script
-          cat > ~/git-askpass.sh << 'EOF'
-          #!/bin/bash
-          case "$1" in
-            Username*) echo "x-access-token" ;;
-            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
-          esac
-          EOF
-          chmod +x ~/git-askpass.sh
-          
-          # Set git to use our credential helper
-          echo "GIT_ASKPASS=$HOME/git-askpass.sh" >> $GITHUB_ENV
-          echo "GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
-      
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Build Rust libraries for iOS
         run: |
@@ -188,72 +121,15 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Configure git for private repos
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          echo "Configured git to use PAT for authentication"
-          echo "Git config:"
-          git config --global --list | grep url || true
-      
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
           targets: aarch64-linux-android,x86_64-linux-android
       
-      - name: Setup cargo config for git authentication
-        run: |
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
-          
-          # Create a git credential helper script
-          cat > ~/git-askpass.sh << 'EOF'
-          #!/bin/bash
-          case "$1" in
-            Username*) echo "x-access-token" ;;
-            Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
-          esac
-          EOF
-          chmod +x ~/git-askpass.sh
-          
-          # Set git to use our credential helper
-          echo "GIT_ASKPASS=$HOME/git-askpass.sh" >> $GITHUB_ENV
-          echo "GH_PERSONAL_ACCESS_TOKEN=${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
-          
-          echo "Created cargo config for git CLI authentication"
-      
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libssl-dev pkg-config
-      
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-      
-      - name: Install Android SDK build-tools
-        run: |
-          sdkmanager --install "build-tools;34.0.0"
-          echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
-      
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r28c
-          add-to-path: true
-        id: setup-ndk
-      
-      - name: Set Android NDK environment
-        run: |
-          echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
-          echo "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+      - name: Setup Android Environment
+        uses: ./.github/actions/setup-android-env
       
       # Build tools are included in the NDK
       
@@ -313,15 +189,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Configure git for private repos
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          mkdir -p ~/.cargo
-          echo "[net]" >> ~/.cargo/config.toml
-          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
-          
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       
       - name: Install cargo-audit
         run: cargo install cargo-audit
