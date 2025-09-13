@@ -16,7 +16,6 @@ jobs:
       actions: read
     outputs:
       tag_created: ${{ steps.check_tag.outputs.EXISTS == 'false' }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Free up disk space
         run: |
@@ -112,12 +111,12 @@ jobs:
       - name: Create GitHub Release
         if: steps.check_tag.outputs.EXISTS == 'false'
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
-          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          name: Release ${{ steps.get_version.outputs.VERSION }}
           body: |
             ## Changes in this release
             
@@ -152,17 +151,7 @@ jobs:
             *This release was automatically created when the version was bumped in Cargo.toml*
           draft: false
           prerelease: false
-
-      - name: Upload Release Assets
-        if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
-          asset_name: navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
-          asset_content_type: application/gzip
+          files: ./artifacts/navia-core-${{ steps.get_version.outputs.RAW_VERSION }}.tar.gz
 
       # Android publish using cached artifacts
       - name: Setup Android Environment  
@@ -217,19 +206,30 @@ jobs:
 
       - name: Setup iOS artifacts
         run: |
+          # Debug: Check what was actually downloaded
+          echo "=== Downloaded iOS artifacts structure ==="
+          find ios-artifacts -type f -name "*.a" -o -name "*.framework" | head -20
+          ls -la ios-artifacts/ || true
+          
           # Create directory structure
           mkdir -p rust/target/aarch64-apple-ios/release
           mkdir -p rust/target/aarch64-apple-ios-sim/release
           mkdir -p ios/build/DerivedData/Build/Products/Release-iphoneos
           mkdir -p ios/build/DerivedData/Build/Products/Release-iphonesimulator
           
-          # Copy Rust library artifacts
-          cp ios-artifacts/rust/target/aarch64-apple-ios/release/libnavia_core.a rust/target/aarch64-apple-ios/release/
-          cp ios-artifacts/rust/target/aarch64-apple-ios-sim/release/libnavia_core.a rust/target/aarch64-apple-ios-sim/release/
+          # Copy Rust library artifacts with fallback search
+          cp ios-artifacts/rust/target/aarch64-apple-ios/release/libnavia_core.a rust/target/aarch64-apple-ios/release/ || \
+            find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios/release*" -exec cp {} rust/target/aarch64-apple-ios/release/ \;
           
-          # Copy iOS framework artifacts
-          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphoneos/Navia.framework ios/build/DerivedData/Build/Products/Release-iphoneos/
-          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework ios/build/DerivedData/Build/Products/Release-iphonesimulator/
+          cp ios-artifacts/rust/target/aarch64-apple-ios-sim/release/libnavia_core.a rust/target/aarch64-apple-ios-sim/release/ || \
+            find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios-sim/release*" -exec cp {} rust/target/aarch64-apple-ios-sim/release/ \;
+          
+          # Copy iOS framework artifacts with fallback search
+          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphoneos/Navia.framework ios/build/DerivedData/Build/Products/Release-iphoneos/ || \
+            find ios-artifacts -name "Navia.framework" -path "*Release-iphoneos*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphoneos/ \;
+            
+          cp -r ios-artifacts/ios/build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework ios/build/DerivedData/Build/Products/Release-iphonesimulator/ || \
+            find ios-artifacts -name "Navia.framework" -path "*Release-iphonesimulator*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphonesimulator/ \;
           
           echo "✅ iOS artifacts downloaded and positioned"
 
@@ -251,14 +251,12 @@ jobs:
           zip -r Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip Navia.xcframework
 
       - name: Upload iOS XCFramework to Release
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.release-and-publish.outputs.upload_url }}
-          asset_path: ./ios/Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip
-          asset_name: Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip
-          asset_content_type: application/zip
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          files: ./ios/Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip
 
       - name: Update Podspec version and push
         run: |

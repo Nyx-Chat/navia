@@ -84,7 +84,7 @@ jobs:
         env:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
-          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
       
       - name: Build Rust libraries for iOS
         run: |
