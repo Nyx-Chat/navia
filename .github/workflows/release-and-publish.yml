@@ -69,15 +69,25 @@ jobs:
       - name: Setup Android artifacts
         if: steps.check_tag.outputs.EXISTS == 'false'
         run: |
+          # Debug: Check what was actually downloaded
+          echo "=== Downloaded artifacts structure ==="
+          find android-artifacts -type f -name "*.so" -o -name "*.aar" | head -20
+          ls -la android-artifacts/ || true
+          
           # Create directory structure and copy artifacts
           mkdir -p android/src/main/jniLibs/arm64-v8a
           mkdir -p android/src/main/jniLibs/x86_64
           mkdir -p android/build/outputs/aar
           
-          # Copy artifacts to expected locations
-          cp android-artifacts/android/src/main/jniLibs/arm64-v8a/libnavia_core.so android/src/main/jniLibs/arm64-v8a/
-          cp android-artifacts/android/src/main/jniLibs/x86_64/libnavia_core.so android/src/main/jniLibs/x86_64/
-          cp android-artifacts/android/build/outputs/aar/android-release.aar android/build/outputs/aar/
+          # Copy artifacts with correct paths (artifacts are uploaded with relative paths)
+          cp android-artifacts/android/src/main/jniLibs/arm64-v8a/libnavia_core.so android/src/main/jniLibs/arm64-v8a/ || \
+            find android-artifacts -name "libnavia_core.so" -path "*arm64-v8a*" -exec cp {} android/src/main/jniLibs/arm64-v8a/ \;
+          
+          cp android-artifacts/android/src/main/jniLibs/x86_64/libnavia_core.so android/src/main/jniLibs/x86_64/ || \
+            find android-artifacts -name "libnavia_core.so" -path "*x86_64*" -exec cp {} android/src/main/jniLibs/x86_64/ \;
+            
+          cp android-artifacts/android/build/outputs/aar/android-release.aar android/build/outputs/aar/ || \
+            find android-artifacts -name "android-release.aar" -exec cp {} android/build/outputs/aar/ \;
           
           echo "✅ Android artifacts downloaded and positioned"
 
