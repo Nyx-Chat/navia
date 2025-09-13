@@ -13,6 +13,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      actions: read
     outputs:
       tag_created: ${{ steps.check_tag.outputs.EXISTS == 'false' }}
       upload_url: ${{ steps.create_release.outputs.upload_url }}
@@ -188,6 +189,9 @@ jobs:
     runs-on: macos-15
     needs: release-and-publish
     if: needs.release-and-publish.outputs.tag_created == 'true'
+    permissions:
+      contents: write
+      actions: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
