@@ -71,28 +71,47 @@ jobs:
         with:
           workflow: pr-validation.yml
           workflow_conclusion: success
-          name: android-build-artifacts
+          pattern: android-lib-*
           path: ./android-artifacts/
 
-      - name: Setup Android artifacts
+      - name: Setup Android Environment
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        uses: ./.github/actions/setup-android-env
+
+      - name: Setup Android artifacts and build AAR (minimal)
         if: steps.check_tag.outputs.EXISTS == 'false'
         run: |
           # Debug: Check what was actually downloaded
           echo "=== Downloaded artifacts structure ==="
-          find android-artifacts -type f -name "*.so" -o -name "*.aar" | head -20
+          find android-artifacts -type f -name "*.so" | head -20
           ls -la android-artifacts/ || true
           
-          # Copy the pre-built AAR and libraries directly
-          mkdir -p android/build/outputs/aar
-          find android-artifacts -name "*.aar" -exec cp {} android/build/outputs/aar/android-release.aar \;
-          
-          # Also copy the libraries for verification
+          # Create directory structure
           mkdir -p android/src/main/jniLibs/arm64-v8a
           mkdir -p android/src/main/jniLibs/x86_64
-          find android-artifacts -name "libnavia_core.so" -path "*arm64-v8a*" -exec cp {} android/src/main/jniLibs/arm64-v8a/ \;
-          find android-artifacts -name "libnavia_core.so" -path "*x86_64*" -exec cp {} android/src/main/jniLibs/x86_64/ \;
           
-          echo "✅ Android artifacts copied directly (no rebuild needed)"
+          # Copy individual matrix artifacts to correct locations
+          find android-artifacts -name "libnavia_core.so" | while read lib; do
+            echo "Found library: $lib"
+            if [[ "$lib" == *"arm64-v8a"* ]]; then
+              echo "Copying to arm64-v8a..."
+              cp "$lib" android/src/main/jniLibs/arm64-v8a/
+            elif [[ "$lib" == *"x86_64"* ]]; then
+              echo "Copying to x86_64..."
+              cp "$lib" android/src/main/jniLibs/x86_64/
+            fi
+          done
+          
+          # Verify libraries are in place
+          echo "=== Libraries after setup ==="
+          ls -la android/src/main/jniLibs/*/
+          
+          # Build ONLY the AAR with pre-built libraries (skip Rust entirely)
+          cd android
+          ./gradlew assembleRelease -x buildRustLibraries --no-daemon --quiet
+          cd ..
+          
+          echo "✅ Android artifacts positioned and minimal AAR built"
 
       - name: Create and push tag
         if: steps.check_tag.outputs.EXISTS == 'false'
