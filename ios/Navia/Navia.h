@@ -13,3 +13,6 @@ FOUNDATION_EXPORT double NaviaVersionNumber;
 
 //! Project version string for Navia.
 FOUNDATION_EXPORT const unsigned char NaviaVersionString[];
+
+// Import the FFI header directly
+#import "navia_coreFFI.h"

@@ -13,7 +13,6 @@
 		1D0E39E22B5A7C0000F7A3D0 /* libnavia_core.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D0E39E12B5A7C0000F7A3D0 /* libnavia_core.dylib */; };
 		1D0E39E42B5A7C1000F7A3D0 /* navia_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0E39E32B5A7C1000F7A3D0 /* navia_core.swift */; };
 		1D0E39E62B5A7C2000F7A3D0 /* navia_coreFFI.h in Headers */ = {isa = PBXBuildFile; fileRef = 1D0E39E52B5A7C2000F7A3D0 /* navia_coreFFI.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		1D0E39E82B5A7C3000F7A3D0 /* module.modulemap in Headers */ = {isa = PBXBuildFile; fileRef = 1D0E39E72B5A7C3000F7A3D0 /* module.modulemap */; settings = {ATTRIBUTES = (Public, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -112,7 +111,6 @@
 			files = (
 				1D0E39CB2B5A7B8000F7A3D0 /* Navia.h in Headers */,
 				1D0E39E62B5A7C2000F7A3D0 /* navia_coreFFI.h in Headers */,
-				1D0E39E82B5A7C3000F7A3D0 /* module.modulemap in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -415,7 +413,7 @@
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				OTHER_LDFLAGS = "-lnavia_core";
-				OTHER_SWIFT_FLAGS = "$(inherited) -I$(SRCROOT)/Navia/Generated -Xcc -fmodule-map-file=$(SRCROOT)/Navia/Generated/module.modulemap";
+				OTHER_SWIFT_FLAGS = "$(inherited) -I$(SRCROOT)/Navia/Generated";
 				PRODUCT_BUNDLE_IDENTIFIER = com.nyx.Navia;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
@@ -457,7 +455,7 @@
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				OTHER_LDFLAGS = "-lnavia_core";
-				OTHER_SWIFT_FLAGS = "$(inherited) -I$(SRCROOT)/Navia/Generated -Xcc -fmodule-map-file=$(SRCROOT)/Navia/Generated/module.modulemap";
+				OTHER_SWIFT_FLAGS = "$(inherited) -I$(SRCROOT)/Navia/Generated";
 				PRODUCT_BUNDLE_IDENTIFIER = com.nyx.Navia;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
