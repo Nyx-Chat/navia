@@ -18,8 +18,15 @@ runs:
         git config --global url."https://x-access-token:${{ env.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
         git config --global url."https://x-access-token:${{ env.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
         mkdir -p ~/.cargo
-        echo "[net]" >> ~/.cargo/config.toml
-        echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+        
+        # Create or update cargo config without duplicates
+        if [ ! -f ~/.cargo/config.toml ] || ! grep -q "\[net\]" ~/.cargo/config.toml; then
+          echo "[net]" >> ~/.cargo/config.toml
+        fi
+        if ! grep -q "git-fetch-with-cli = true" ~/.cargo/config.toml; then
+          echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+        fi
+        
         echo "Configured git to use PAT for authentication"
     
     - name: Setup cargo config for git authentication
