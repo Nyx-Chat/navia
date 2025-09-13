@@ -1,0 +1,58 @@
+name: 'Setup Rust Environment'
+description: 'Configure Rust with git authentication, toolchain, and cargo caching'
+inputs:
+  targets:
+    description: 'Rust targets to install (space-separated)'
+    required: false
+    default: ''
+  components:
+    description: 'Rust components to install (space-separated)'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure git for private repos
+      shell: bash
+      run: |
+        git config --global url."https://x-access-token:${{ env.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        git config --global url."https://x-access-token:${{ env.GH_PERSONAL_ACCESS_TOKEN }}@github.com/".insteadOf "git@github.com:"
+        mkdir -p ~/.cargo
+        echo "[net]" >> ~/.cargo/config.toml
+        echo "git-fetch-with-cli = true" >> ~/.cargo/config.toml
+        echo "Configured git to use PAT for authentication"
+    
+    - name: Setup cargo config for git authentication
+      shell: bash
+      run: |
+        # Create a git credential helper script
+        cat > ~/git-askpass.sh << 'EOF'
+        #!/bin/bash
+        case "$1" in
+          Username*) echo "x-access-token" ;;
+          Password*) echo "$GH_PERSONAL_ACCESS_TOKEN" ;;
+        esac
+        EOF
+        chmod +x ~/git-askpass.sh
+        
+        # Set git to use our credential helper
+        echo "GIT_ASKPASS=$HOME/git-askpass.sh" >> $GITHUB_ENV
+        echo "GH_PERSONAL_ACCESS_TOKEN=${{ env.GH_PERSONAL_ACCESS_TOKEN }}" >> $GITHUB_ENV
+        echo "Created cargo config for git CLI authentication"
+    
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ inputs.targets }}
+        components: ${{ inputs.components }}
+    
+    - name: Cache cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
