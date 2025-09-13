@@ -12,8 +12,13 @@ runs:
     - name: Install system dependencies
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libssl-dev pkg-config
+        # Install required system packages (Linux only)
+        if command -v apt-get >/dev/null 2>&1; then
+          sudo apt-get update -q
+          sudo apt-get install -y build-essential libssl-dev pkg-config unzip
+        else
+          echo "Non-Linux system detected - skipping apt-get dependencies"
+        fi
     
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -21,8 +26,20 @@ runs:
     - name: Install Android SDK build-tools
       shell: bash
       run: |
+        # Verify ANDROID_HOME is set
+        if [ -z "$ANDROID_HOME" ]; then
+          echo "❌ ERROR: ANDROID_HOME not set"
+          exit 1
+        fi
+        
         sdkmanager --install "build-tools;34.0.0"
         echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
+        
+        # Verify installation
+        if [ ! -d "$ANDROID_HOME/build-tools/34.0.0" ]; then
+          echo "❌ ERROR: Build tools installation failed"
+          exit 1
+        fi
     
     - name: Setup Android NDK
       uses: nttld/setup-ndk@v1
@@ -34,6 +51,38 @@ runs:
     - name: Set Android NDK environment
       shell: bash
       run: |
-        echo "ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
-        echo "ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}" >> $GITHUB_ENV
-        echo "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+        NDK_PATH="${{ steps.setup-ndk.outputs.ndk-path }}"
+        
+        # Verify NDK installation
+        if [ ! -d "$NDK_PATH" ]; then
+          echo "❌ ERROR: NDK not found at $NDK_PATH"
+          exit 1
+        fi
+        
+        echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$NDK_PATH" >> $GITHUB_ENV
+        
+        # Detect platform for NDK toolchain path
+        if [ "$(uname)" = "Darwin" ]; then
+          NDK_TOOLCHAIN_PATH="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64/bin"
+        else
+          NDK_TOOLCHAIN_PATH="$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin"
+        fi
+        
+        if [ -d "$NDK_TOOLCHAIN_PATH" ]; then
+          echo "$NDK_TOOLCHAIN_PATH" >> $GITHUB_PATH
+          echo "✅ NDK toolchain added to PATH: $NDK_TOOLCHAIN_PATH"
+        else
+          echo "⚠️  NDK toolchain not found at expected path: $NDK_TOOLCHAIN_PATH"
+        fi
+    
+    - name: Cache Gradle
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+          android/.gradle
+        key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-

@@ -12,6 +12,18 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        # Install required system packages
+        if command -v apt-get >/dev/null 2>&1; then
+          sudo apt-get update -q
+          sudo apt-get install -y build-essential pkg-config libssl-dev
+        elif command -v brew >/dev/null 2>&1; then
+          # macOS dependencies are usually pre-installed
+          echo "macOS detected - using pre-installed dependencies"
+        fi
+        
     - name: Configure git for private repos
       shell: bash
       run: |
@@ -61,5 +73,17 @@ runs:
           ~/.cargo/registry/index/
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ inputs.targets }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-
+          ${{ runner.os }}-cargo-
+          
+    - name: Cache target directory
+      uses: actions/cache@v4
+      with:
+        path: |
+          rust/target/
+        key: ${{ runner.os }}-rust-target-${{ inputs.targets }}-${{ hashFiles('rust/**/*.rs', 'rust/**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-target-${{ inputs.targets }}-
+          ${{ runner.os }}-rust-target-
