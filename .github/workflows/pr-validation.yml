@@ -342,10 +342,11 @@ jobs:
           # Verify libraries are in place
           ls -la android/src/main/jniLibs/*/
       
-      - name: Build Android AAR
+      - name: Build Android AAR (AAR only, libraries already built)
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon
+          # Skip Rust build since we have pre-built libraries
+          ./gradlew assembleRelease -x buildRustLibraries --no-daemon
           # Ensure all processes complete
           sleep 5
       
