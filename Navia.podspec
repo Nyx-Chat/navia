@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name          = "Navia"
-  spec.version       = "1.1.28"
+  spec.version       = "1.2.8"
   spec.summary       = "Secure DIDComm v2 messaging library for iOS"
   spec.description   = <<-DESC
                        Navia is a secure DIDComm v2 messaging library for mobile applications, 
