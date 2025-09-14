@@ -403,3 +403,49 @@ jobs:
         run: |
           cd rust/navia-core
           cargo doc --no-deps --all-features
+
+  # Automatic Podspec version sync
+  sync-podspec:
+    name: Sync Podspec Version
+    runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
+    needs: [changes, quick-checks]
+    if: needs.changes.outputs.rust == 'true' && !cancelled() && !failure()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check if Cargo.toml version changed
+        id: version_check
+        run: |
+          # Get the current version from Cargo.toml
+          CARGO_VERSION=$(grep -E '^version = ' rust/navia-core/Cargo.toml | cut -d'"' -f2)
+          echo "CARGO_VERSION=$CARGO_VERSION" >> $GITHUB_OUTPUT
+          
+          # Get the current version from Podspec  
+          PODSPEC_VERSION=$(grep -E 'spec\.version.*=' Navia.podspec | sed 's/.*= *"//' | sed 's/".*//')
+          echo "PODSPEC_VERSION=$PODSPEC_VERSION" >> $GITHUB_OUTPUT
+          
+          if [ "$CARGO_VERSION" != "$PODSPEC_VERSION" ]; then
+            echo "VERSION_MISMATCH=true" >> $GITHUB_OUTPUT
+            echo "Version mismatch detected: Cargo.toml=$CARGO_VERSION, Podspec=$PODSPEC_VERSION"
+          else
+            echo "VERSION_MISMATCH=false" >> $GITHUB_OUTPUT
+            echo "Versions are in sync: $CARGO_VERSION"
+          fi
+      
+      - name: Update Podspec version
+        if: steps.version_check.outputs.VERSION_MISMATCH == 'true'
+        run: |
+          # Update the podspec version to match Cargo.toml
+          sed -i '' "s/spec\.version.*=.*/spec.version       = \"${{ steps.version_check.outputs.CARGO_VERSION }}\"/" Navia.podspec || \
+          sed -i "s/spec\.version.*=.*/spec.version       = \"${{ steps.version_check.outputs.CARGO_VERSION }}\"/" Navia.podspec
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Commit and push the change
+          git add Navia.podspec
+          git commit -m "sync: update Podspec version to ${{ steps.version_check.outputs.CARGO_VERSION }}"
+          git push
