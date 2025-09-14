@@ -414,6 +414,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
       
       - name: Check if Cargo.toml version changed
         id: version_check
@@ -438,14 +439,20 @@ jobs:
         if: steps.version_check.outputs.VERSION_MISMATCH == 'true'
         run: |
           # Update the podspec version to match Cargo.toml
-          sed -i '' "s/spec\.version.*=.*/spec.version       = \"${{ steps.version_check.outputs.CARGO_VERSION }}\"/" Navia.podspec || \
-          sed -i "s/spec\.version.*=.*/spec.version       = \"${{ steps.version_check.outputs.CARGO_VERSION }}\"/" Navia.podspec
+          CARGO_VERSION="${{ steps.version_check.outputs.CARGO_VERSION }}"
+          
+          # Use platform-appropriate sed command
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            sed -i '' "s/spec\.version.*=.*/spec.version       = \"$CARGO_VERSION\"/" Navia.podspec
+          else
+            sed -i "s/spec\.version.*=.*/spec.version       = \"$CARGO_VERSION\"/" Navia.podspec
+          fi
           
           # Configure git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Commit and push the change
+          # Commit and push the change to the PR branch
           git add Navia.podspec
-          git commit -m "sync: update Podspec version to ${{ steps.version_check.outputs.CARGO_VERSION }}"
-          git push
+          git commit -m "sync: update Podspec version to $CARGO_VERSION"
+          git push origin HEAD
