@@ -403,3 +403,4 @@ jobs:
         run: |
           cd rust/navia-core
           cargo doc --no-deps --all-features
+
