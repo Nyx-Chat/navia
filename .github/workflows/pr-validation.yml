@@ -173,7 +173,7 @@ jobs:
           targets: aarch64-apple-ios-sim
       
       - name: Download iOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: ios-*
           path: ./ios-artifacts/
@@ -332,7 +332,7 @@ jobs:
         uses: ./.github/actions/setup-android-env
       
       - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: android-lib-*
           path: ./android-libs/
