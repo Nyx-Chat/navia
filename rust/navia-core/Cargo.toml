@@ -33,6 +33,7 @@ path = "../../examples/advanced/complete_api.rs"
 [dependencies]
 uniffi.workspace = true
 navia-didcomm.workspace = true
+navia-messaging.workspace = true
 askar-storage.workspace = true
 async-trait.workspace = true
 serde_json.workspace = true

@@ -206,7 +206,7 @@ impl DidComInterface {
             // Check if we're already in a Tokio context
             let (db, client) = if Handle::try_current().is_ok() {
                 // We're in a context, proceed normally
-                let db = AskarDB::provision(&path, store_key)
+                let db = AskarDB::provision_sqlite(&path, store_key)
                     .await
                     .map_err(Self::map_db_error)?;
 
@@ -223,7 +223,7 @@ impl DidComInterface {
                 let path_clone = path.clone();
 
                 let handle = runtime.spawn(async move {
-                    let db = AskarDB::provision(&path_clone, store_key)
+                    let db = AskarDB::provision_sqlite(&path_clone, store_key)
                         .await
                         .map_err(|e| crate::error::NaviaError::External(e.to_string()))?;
                     let client = DIDCacheClient::new(DIDCacheConfigBuilder::default().build())

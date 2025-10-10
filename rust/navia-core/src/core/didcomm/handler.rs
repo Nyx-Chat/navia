@@ -1,7 +1,7 @@
 //! Core DIDComm message handling logic
 //!
-//! This module contains the actual implementation of DIDComm messaging,
-//! including packing, unpacking, and DID generation functionality.
+//! This module provides DIDComm messaging with validation, audit logging, and storage abstraction.
+//! Uses navia_messaging types but adds additional safety and observability features.
 
 use crate::core::audit::{audit_log, SecurityEvent};
 use crate::core::didcomm::message::{Message, MessageBody};
@@ -10,6 +10,8 @@ use crate::core::validation::{validate_did, validate_uri};
 use crate::error::{
     DidError, NaviaError, NaviaResult, PackingError, SerializationError, UnpackingError,
 };
+use crate::infrastructure::resolvers::did::AskarDIDResolver;
+use crate::infrastructure::resolvers::secrets::AskarSecretsResolver;
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
 use did_peer::{
     DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys, DIDPeerService, DIDService,
@@ -25,34 +27,9 @@ use std::time::SystemTime;
 use zeroize::Zeroize;
 
 /// Storage category constant for secret materials
-///
-/// All secret keys and private materials are stored under this category
-/// in the encrypted database for easy retrieval and management.
 pub const CATEGORY_SECRET: &str = "secret";
 
-/// Core DIDComm messaging handler that orchestrates all DIDComm operations.
-///
-/// This struct is the heart of the DIDComm implementation, providing:
-/// - Message packing (encryption) and unpacking (decryption)
-/// - DID generation and management
-/// - Secret key storage and retrieval
-/// - Integration with DID resolvers for external DID lookups
-///
-/// # Type Parameters
-///
-/// * `S` - Storage backend that implements both `MessageStorage` and `SecretStorage` traits
-///
-/// # Architecture
-///
-/// The handler uses dependency injection for storage and resolvers, making it
-/// flexible and testable. It coordinates between:
-/// - Storage layer for persisting secrets and messages
-/// - DID resolver for looking up external DIDs
-/// - Secrets resolver for retrieving local private keys
-///
-/// # Thread Safety
-///
-/// The handler is thread-safe through the use of `Arc` for shared storage access.
+/// Core DIDComm messaging handler with validation, audit logging, and storage abstraction.
 pub struct DidcommMessaging<S>
 where
     S: MessageStorage + SecretStorage,
@@ -67,15 +44,6 @@ where
     S: MessageStorage + SecretStorage,
 {
     /// Creates a new DIDComm messaging handler.
-    ///
-    /// # Arguments
-    ///
-    /// * `storage` - Arc-wrapped storage backend for secrets and messages
-    /// * `didcache_client` - DID resolver client for external DID lookups
-    ///
-    /// # Returns
-    ///
-    /// A new `DidcommMessaging` instance is ready for DIDComm operations.
     pub fn new(storage: Arc<S>, didcache_client: DIDCacheClient) -> Self {
         Self {
             storage: storage.clone(),
@@ -85,18 +53,6 @@ where
     }
 
     /// Stores a secret (private key) in the encrypted storage.
-    ///
-    /// Secrets are serialized to JSON before storage for compatibility
-    /// with the DIDComm library's secret format.
-    ///
-    /// # Arguments
-    ///
-    /// * `secret` - The secret to store, containing key material and metadata
-    ///
-    /// # Errors
-    ///
-    /// * `CoreError::Serialization` - If the secret cannot be serialized to JSON
-    /// * `CoreError::Storage` - If the storage operation fails
     pub async fn add_secret(&self, secret: &Secret) -> NaviaResult<()> {
         let secret_bytes = serde_json::to_vec(secret).map_err(|e| {
             NaviaError::Serialization(SerializationError::JsonError {
@@ -108,18 +64,6 @@ where
     }
 
     /// Stores multiple secrets in the encrypted storage.
-    ///
-    /// This is a convenience method that calls `add_secret` for each secret
-    /// in the provided slice. Useful when generating DIDs with multiple keys.
-    ///
-    /// # Arguments
-    ///
-    /// * `secrets` - Slice of secrets to store
-    ///
-    /// # Errors
-    ///
-    /// Returns the first error encountered. Note that this means some secrets
-    /// may be stored before an error occurs.
     pub async fn add_secrets(&self, secrets: &[Secret]) -> NaviaResult<()> {
         for secret in secrets {
             self.add_secret(secret).await?;
@@ -127,29 +71,7 @@ where
         Ok(())
     }
 
-    /// Packs (encrypts) a message using DIDComm encryption.
-    ///
-    /// This is the low-level packing method that provides full control over
-    /// the packing process, including signing and encryption options.
-    ///
-    /// # Arguments
-    ///
-    /// * `msg` - The message to encrypt
-    /// * `to` - Recipient's DID
-    /// * `from` - Optional sender's DID (required for authenticated encryption)
-    /// * `sign_by` - Optional DID to sign the message (usually the same as `from`)
-    /// * `opts` - Packing options (algorithms, forward secrecy, etc.)
-    ///
-    /// # Returns
-    ///
-    /// A tuple of:
-    /// - The encrypted message as a JSON string
-    /// - Metadata about the packing operation
-    ///
-    /// # Errors
-    ///
-    /// * `CoreError::Packing` - If encryption fails due to missing keys,
-    ///   invalid DIDs, or algorithm errors
+    /// Packs (encrypts) a message using DIDComm encryption with full validation and audit logging.
     pub async fn pack_encrypted(
         &self,
         msg: &Message,
@@ -197,27 +119,6 @@ where
     }
 
     /// Packs (encrypts) a message with default encryption settings.
-    ///
-    /// This is the simplified packing method that uses sensible defaults:
-    /// - Authenticated encryption (sender is verified)
-    /// - Message is signed by the sender
-    /// - Default encryption algorithms
-    ///
-    /// # Arguments
-    ///
-    /// * `msg` - The message to encrypt
-    /// * `to` - Recipient's DID
-    /// * `from` - Sender's DID (used for both authentication and signing)
-    ///
-    /// # Returns
-    ///
-    /// A tuple of:
-    /// - The encrypted message as a JSON string
-    /// - Metadata about the packing operation
-    ///
-    /// # Errors
-    ///
-    /// * `CoreError::Packing` - If encryption fails
     pub async fn pack_message(
         &self,
         msg: &Message,
@@ -235,28 +136,6 @@ where
     }
 
     /// Unpacks (decrypts) an encrypted DIDComm message.
-    ///
-    /// This is the low-level unpacking method that provides full control
-    /// over the unpacking process through options.
-    ///
-    /// # Arguments
-    ///
-    /// * `msg` - The encrypted message as a JSON string
-    /// * `opts` - Unpacking options (verification settings, etc.)
-    ///
-    /// # Returns
-    ///
-    /// A tuple of:
-    /// - The decrypted message
-    /// - Metadata about the unpacking operation (sender verification, etc.)
-    ///
-    /// # Errors
-    ///
-    /// * `CoreError::Unpacking` - If decryption fails due to:
-    ///   - Wrong recipient (no matching private keys)
-    ///   - Corrupted message
-    ///   - Invalid signature
-    ///   - Malformed message structure
     pub async fn unpack(
         &self,
         msg: &str,
@@ -270,11 +149,11 @@ where
         // Convert DIDComm message to our core Message
         let core_msg = self.didcomm_to_message(didcomm_msg)?;
 
-        // Audit logs the decryption event
+        // Audit log the decryption event
         audit_log(
             SecurityEvent::MessageUnpacked {
                 from: metadata.encrypted_from_kid.clone(),
-                to: None, // Recipient info not available in metadata
+                to: None,
                 message_id: core_msg.id.clone(),
                 timestamp: SystemTime::now(),
             },
@@ -285,66 +164,11 @@ where
     }
 
     /// Unpacks (decrypts) a message with default settings.
-    ///
-    /// This is the simplified unpacking method that uses sensible defaults:
-    /// - Verifies signatures when present
-    /// - Resolves sender DIDs automatically
-    ///
-    /// # Arguments
-    ///
-    /// * `msg` - The encrypted message as a JSON string
-    ///
-    /// # Returns
-    ///
-    /// A tuple of:
-    /// - The decrypted message
-    /// - Metadata about the unpacking operation
-    ///
-    /// # Errors
-    ///
-    /// * `CoreError::Unpacking` - If decryption fails
     pub async fn unpack_message(&self, msg: &str) -> NaviaResult<(Message, UnpackMetadata)> {
         self.unpack(msg, &UnpackOptions::default()).await
     }
 
     /// Generates a new peer DID with associated encryption and signing keys.
-    ///
-    /// Creates a DID using the did:peer method, which includes:
-    /// - An Ed25519 key for signing (authentication)
-    /// - A P-256 key for encryption (key agreement)
-    /// - Service endpoint for message routing
-    ///
-    /// The generated keys are automatically stored in the encrypted database.
-    ///
-    /// # Arguments
-    ///
-    /// * `uri` - Service endpoint URI where this DID can receive messages
-    /// * `routing_keys` - Optional mediator DIDs for message forwarding
-    ///
-    /// # Returns
-    ///
-    /// The generated DID string (e.g., "did:peer:1zQm...")
-    ///
-    /// # Errors
-    ///
-    /// * `CoreError::DidGeneration` - If DID generation fails
-    /// * `CoreError::Storage` - If storing the generated keys fails
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // Direct messaging
-    /// let did = messaging.generate_did(
-    ///     "https://example.com/didcomm".to_string(),
-    ///     vec![]
-    /// ).await?;
-    ///
-    /// // With mediator routing
-    /// let did = messaging.generate_did(
-    ///     "https://mediator.com/forward".to_string(),
-    ///     vec!["did:peer:mediator123".to_string()]
-    /// ).await?;
-    /// ```
     pub async fn generate_did(
         &self,
         uri: String,
@@ -415,18 +239,6 @@ where
     }
 
     /// Converts internal Message representation to DIDComm format.
-    ///
-    /// Handles the transformation of message body types:
-    /// - String bodies are wrapped in JSON
-    /// - Object bodies are passed through as-is
-    ///
-    /// # Arguments
-    ///
-    /// * `msg` - Internal message representation
-    ///
-    /// # Returns
-    ///
-    /// A DIDComm library compatible message
     fn message_to_didcomm(&self, msg: &Message) -> DIDCommMessage {
         let body = match &msg.body {
             MessageBody::String(s) => json!(s),
@@ -435,12 +247,10 @@ where
 
         let mut builder = DIDCommMessage::build(msg.id.clone(), msg.msg_type.clone(), body);
 
-        // Add all recipients (already validated in pack_encrypted)
         for recipient in &msg.to {
             builder = builder.to(recipient.clone());
         }
 
-        // Add a sender if present (already validated in pack_encrypted)
         if let Some(from) = &msg.from {
             builder = builder.from(from.clone());
         }
@@ -449,24 +259,7 @@ where
     }
 
     /// Converts DIDComm format message to internal representation.
-    ///
-    /// Handles the transformation of message body types:
-    /// - String JSON values are extracted as strings
-    /// - Complex JSON objects are preserved as objects
-    ///
-    /// # Arguments
-    ///
-    /// * `msg` - DIDComm library message
-    ///
-    /// # Returns
-    ///
-    /// Internal message representation
-    ///
-    /// # Errors
-    ///
-    /// Currently infallible but returns Result for future extensibility
     fn didcomm_to_message(&self, msg: DIDCommMessage) -> NaviaResult<Message> {
-        // If the body is a string value, extract it. Otherwise, keep as an object
         let body = if msg.body.is_string() {
             MessageBody::String(msg.body.as_str().unwrap_or("").to_string())
         } else {
@@ -482,16 +275,8 @@ where
             headers: Default::default(),
         })
     }
-}
 
-// The actual resolver implementations from the infrastructure layer
-use crate::infrastructure::resolvers::did::AskarDIDResolver;
-use crate::infrastructure::resolvers::secrets::AskarSecretsResolver;
-
-/// Maps DIDComm library errors to specific NaviaError variants based on error message content.
-///
-/// This function centralizes error mapping logic to avoid duplication between pack and unpack operations.
-trait DidcommErrorMapper {
+    /// Maps DIDComm library errors to specific NaviaError variants.
     fn map_packing_error(
         err: navia_didcomm::error::Error,
         to: &str,
@@ -530,6 +315,3 @@ trait DidcommErrorMapper {
         }
     }
 }
-
-/// Implement the error mapper for our handler
-impl<S> DidcommErrorMapper for DidcommMessaging<S> where S: MessageStorage + SecretStorage {}
