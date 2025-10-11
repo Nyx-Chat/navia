@@ -12,7 +12,7 @@ use crate::core::validation::{
     validate_message_body, validate_seed, validate_storage_category, validate_storage_key,
 };
 use crate::ffi::types::{DIDCommMessage, DidCommError, KeyValue};
-use crate::infrastructure::AskarStorage;
+use crate::AskarStorage;
 use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
 use askar_storage::generate_raw_store_key;
 use std::sync::{Arc, RwLock};

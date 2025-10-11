@@ -68,15 +68,18 @@
 //! - **Native Performance**: Rust core with minimal FFI overhead
 //! - **16KB Alignment**: Optimized for Android 15+ requirements
 
-// Internal modules - the old structure is still here for now
-// to ensure we don't break anything during refactoring
+// Internal modules
 mod askardb;
 mod error;
 
-// New architecture modules
+// Core modules
 pub mod core;
 pub mod ffi;
-pub mod infrastructure;
+
+// Re-export implementations from navia-messaging
+pub use navia_messaging::resolvers::did::AskarDIDResolver;
+pub use navia_messaging::resolvers::secrets::AskarSecretsResolver;
+pub use navia_messaging::storage::AskarStorage;
 
 // Re-export the FFI interface for UniFFI
 pub use ffi::{DidComInterface, DidCommError};
