@@ -3512,14 +3512,13 @@ dependencies = [
 
 [[package]]
 name = "navia-core"
-version = "1.2.8"
+version = "1.2.9"
 dependencies = [
  "affinidi-did-resolver-cache-sdk",
  "askar-storage",
  "async-trait",
  "did-peer",
  "futures",
- "lazy_static",
  "navia-didcomm",
  "navia-messaging",
  "once_cell",
@@ -3527,11 +3526,9 @@ dependencies = [
  "rusty-hook",
  "serde",
  "serde_json",
- "slab",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
- "tracing-subscriber",
  "uniffi",
  "uuid",
  "zeroize",

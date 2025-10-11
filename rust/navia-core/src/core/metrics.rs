@@ -198,9 +198,8 @@ impl MetricsCollector {
 }
 
 // Global metrics instance
-lazy_static::lazy_static! {
-    pub static ref METRICS: MetricsCollector = MetricsCollector::new();
-}
+pub static METRICS: once_cell::sync::Lazy<MetricsCollector> =
+    once_cell::sync::Lazy::new(MetricsCollector::new);
 
 #[cfg(test)]
 mod tests {
