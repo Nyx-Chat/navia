@@ -581,8 +581,8 @@ impl DidComInterface {
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle = runtime
-                .spawn(async move { messaging.db.insert(&category, &name, &value).await });
+            let handle =
+                runtime.spawn(async move { messaging.db.insert(&category, &name, &value).await });
 
             handle
                 .await
@@ -646,8 +646,7 @@ impl DidComInterface {
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle =
-                runtime.spawn(async move { messaging.db.get(&category, &name).await });
+            let handle = runtime.spawn(async move { messaging.db.get(&category, &name).await });
 
             let result = handle
                 .await
@@ -695,8 +694,7 @@ impl DidComInterface {
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle =
-                runtime.spawn(async move { messaging.db.remove(&category, &name).await });
+            let handle = runtime.spawn(async move { messaging.db.remove(&category, &name).await });
 
             handle
                 .await
@@ -750,8 +748,8 @@ impl DidComInterface {
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle = runtime
-                .spawn(async move { messaging.db.update(&category, &name, &value).await });
+            let handle =
+                runtime.spawn(async move { messaging.db.update(&category, &name, &value).await });
 
             handle
                 .await
