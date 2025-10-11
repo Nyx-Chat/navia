@@ -3,12 +3,12 @@
 //! This module provides DIDComm messaging with validation, audit logging, and storage abstraction.
 //! Uses navia_messaging types but adds additional safety and observability features.
 
-use crate::askardb::AskarDB;
 use crate::core::audit::{audit_log, SecurityEvent};
 use crate::core::didcomm::message::{Message, MessageBody};
 use crate::core::validation::{validate_did, validate_uri};
 use crate::error::{DidError, NaviaError, NaviaResult, PackingError, UnpackingError};
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
+use navia_messaging::askardb::AskarDB;
 use did_peer::{
     DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys, DIDPeerService, DIDService,
 };

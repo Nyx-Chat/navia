@@ -69,15 +69,15 @@
 //! - **16KB Alignment**: Optimized for Android 15+ requirements
 
 // Internal modules
-mod askardb;
-mod error;
-
-// Core modules
+pub mod error;
 pub mod core;
+
+// FFI layer (only public interface)
 pub mod ffi;
 
 // Re-export the FFI interface for UniFFI
-pub use ffi::{DidComInterface, DidCommError};
+pub use ffi::interface::DidComInterface;
+pub use ffi::types::DidCommError;
 
 // Set up UniFFI scaffolding
 uniffi::setup_scaffolding!();

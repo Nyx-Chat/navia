@@ -3,7 +3,6 @@
 //! This module provides the UniFFI-exposed interface that Kotlin/Swift
 //! applications use to interact with the navia library.
 
-use crate::askardb::AskarDB;
 use crate::core::audit::{audit_log, SecurityEvent, StorageOperation};
 use crate::core::didcomm::handler::DidcommMessaging;
 use crate::core::didcomm::message::Message;
@@ -13,6 +12,7 @@ use crate::core::validation::{
 use crate::ffi::types::{DIDCommMessage, DidCommError, KeyValue};
 use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
 use askar_storage::generate_raw_store_key;
+use navia_messaging::askardb::AskarDB;
 use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
 use tokio::runtime::{Handle, Runtime};

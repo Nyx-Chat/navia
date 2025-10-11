@@ -8,6 +8,3 @@
 pub mod conversions;
 pub mod interface;
 pub mod types;
-
-pub use interface::DidComInterface;
-pub use types::{DIDCommMessage, DidCommError, KeyValue};

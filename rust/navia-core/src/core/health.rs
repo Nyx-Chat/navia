@@ -2,8 +2,8 @@
 //!
 //! Provides methods to verify that all core components are functioning correctly.
 
-use crate::askardb::AskarDB;
 use crate::error::{NaviaError, NaviaResult};
+use navia_messaging::askardb::AskarDB;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
