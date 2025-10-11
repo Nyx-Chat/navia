@@ -3528,8 +3528,6 @@ dependencies = [
  "serde",
  "serde_json",
  "slab",
- "ssi-core",
- "ssi-dids-core",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
