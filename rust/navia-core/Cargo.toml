@@ -35,6 +35,7 @@ uniffi.workspace = true
 navia-didcomm.workspace = true
 navia-messaging.workspace = true
 askar-storage.workspace = true
+async-trait.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 did-peer.workspace = true
@@ -54,7 +55,6 @@ tracing-subscriber.workspace = true
 cli = ["uniffi/cli"]
 
 [dev-dependencies]
-async-trait.workspace = true
 tempfile.workspace = true
 futures = "0.3.31"
 rusty-hook = "0.11.2"

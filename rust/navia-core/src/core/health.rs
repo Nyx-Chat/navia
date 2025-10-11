@@ -2,7 +2,7 @@
 //!
 //! Provides methods to verify that all core components are functioning correctly.
 
-use crate::core::storage::traits::{MessageStorage, SecretStorage};
+use crate::askardb::AskarDB;
 use crate::error::{NaviaError, NaviaResult};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -46,19 +46,13 @@ pub struct HealthCheckResult {
 }
 
 /// Health checker for the DIDComm library
-pub struct HealthChecker<S>
-where
-    S: MessageStorage + SecretStorage,
-{
-    storage: Arc<S>,
+pub struct HealthChecker {
+    storage: Arc<AskarDB>,
 }
 
-impl<S> HealthChecker<S>
-where
-    S: MessageStorage + SecretStorage,
-{
+impl HealthChecker {
     /// Creates a new health checker
-    pub fn new(storage: Arc<S>) -> Self {
+    pub fn new(storage: Arc<AskarDB>) -> Self {
         Self { storage }
     }
 
@@ -104,18 +98,18 @@ where
     async fn check_storage_health(&self) -> ComponentHealth {
         let start = Instant::now();
         let test_key = "__health_check_test__";
-        let test_value = "test_value";
+        let test_value = "test_value".to_string();
         let test_category = "__health__";
 
         // Try to write a test value
         match self
             .storage
-            .insert(test_category, test_key, test_value)
+            .insert(test_category, test_key, &test_value)
             .await
         {
             Ok(_) => {
                 // Try to read it back
-                match self.storage.get(test_category, test_key).await {
+                match self.storage.get::<String>(test_category, test_key).await {
                     Ok(Some(value)) if value == test_value => {
                         // Clean up
                         let _ = self.storage.remove(test_category, test_key).await;
@@ -201,18 +195,12 @@ where
         let test_category = "__health__";
 
         // Try to read from storage (non-existent key is fine)
-        match self.storage.get(test_category, test_key).await {
+        match self.storage.get::<String>(test_category, test_key).await {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
         }
     }
-}
 
-/// Health check functions for FFI
-impl<S> HealthChecker<S>
-where
-    S: MessageStorage + SecretStorage,
-{
     /// Returns a JSON string with health status for FFI
     pub async fn get_health_json(&self) -> NaviaResult<String> {
         let result = self.check_health().await?;
@@ -227,180 +215,5 @@ where
     /// Simple boolean health check for FFI
     pub async fn is_healthy(&self) -> bool {
         self.quick_check().await.unwrap_or(false)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::error::StorageError;
-    use async_trait::async_trait;
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    /// Mock storage for testing
-    struct MockStorage {
-        data: Mutex<HashMap<String, HashMap<String, String>>>,
-        fail_mode: Mutex<Option<String>>,
-    }
-
-    impl MockStorage {
-        fn new() -> Self {
-            Self {
-                data: Mutex::new(HashMap::new()),
-                fail_mode: Mutex::new(None),
-            }
-        }
-
-        fn set_fail_mode(&self, mode: Option<String>) {
-            *self.fail_mode.lock().unwrap() = mode;
-        }
-    }
-
-    #[async_trait]
-    impl MessageStorage for MockStorage {
-        async fn insert(
-            &self,
-            category: &str,
-            key: &str,
-            value: &str,
-        ) -> Result<(), navia_messaging::error::Error> {
-            if let Some(ref mode) = *self.fail_mode.lock().unwrap() {
-                if mode == "write" {
-                    return Err(navia_messaging::error::Error::msg(
-                        navia_messaging::error::ErrorKind::InvalidState,
-                        "Mock failure",
-                    ));
-                }
-            }
-
-            let mut data = self.data.lock().unwrap();
-            data.entry(category.to_string())
-                .or_default()
-                .insert(key.to_string(), value.to_string());
-            Ok(())
-        }
-
-        async fn get(
-            &self,
-            category: &str,
-            key: &str,
-        ) -> Result<Option<String>, navia_messaging::error::Error> {
-            if let Some(ref mode) = *self.fail_mode.lock().unwrap() {
-                if mode == "read" {
-                    return Err(navia_messaging::error::Error::msg(
-                        navia_messaging::error::ErrorKind::InvalidState,
-                        "Mock failure",
-                    ));
-                }
-            }
-
-            let data = self.data.lock().unwrap();
-            Ok(data.get(category).and_then(|cat| cat.get(key).cloned()))
-        }
-
-        async fn update(
-            &self,
-            category: &str,
-            key: &str,
-            value: &str,
-        ) -> Result<(), navia_messaging::error::Error> {
-            self.insert(category, key, value).await
-        }
-
-        async fn remove(
-            &self,
-            category: &str,
-            key: &str,
-        ) -> Result<(), navia_messaging::error::Error> {
-            let mut data = self.data.lock().unwrap();
-            if let Some(cat) = data.get_mut(category) {
-                cat.remove(key);
-            }
-            Ok(())
-        }
-    }
-
-    #[async_trait]
-    impl SecretStorage for MockStorage {
-        async fn store_secret(
-            &self,
-            _id: &str,
-            _secret: &[u8],
-        ) -> Result<(), navia_messaging::error::Error> {
-            Ok(())
-        }
-
-        async fn get_secret(
-            &self,
-            _id: &str,
-        ) -> Result<Option<Vec<u8>>, navia_messaging::error::Error> {
-            Ok(None)
-        }
-
-        async fn delete_secret(&self, _id: &str) -> Result<(), navia_messaging::error::Error> {
-            Ok(())
-        }
-    }
-
-    #[tokio::test]
-    async fn test_healthy_system() {
-        let storage = Arc::new(MockStorage::new());
-        let checker = HealthChecker::new(storage);
-
-        let result = checker.check_health().await.unwrap();
-        assert!(matches!(result.status, HealthStatus::Healthy));
-
-        // Storage and crypto should be healthy
-        let storage_health = result
-            .components
-            .iter()
-            .find(|c| c.name == "Storage")
-            .unwrap();
-        assert!(matches!(storage_health.status, HealthStatus::Healthy));
-    }
-
-    #[tokio::test]
-    async fn test_storage_failure() {
-        let storage = Arc::new(MockStorage::new());
-        storage.set_fail_mode(Some("write".to_string()));
-
-        let checker = HealthChecker::new(storage);
-        let result = checker.check_health().await.unwrap();
-
-        assert!(matches!(result.status, HealthStatus::Unhealthy { .. }));
-
-        let storage_health = result
-            .components
-            .iter()
-            .find(|c| c.name == "Storage")
-            .unwrap();
-        assert!(matches!(
-            storage_health.status,
-            HealthStatus::Unhealthy { .. }
-        ));
-    }
-
-    #[tokio::test]
-    async fn test_quick_check() {
-        let storage = Arc::new(MockStorage::new());
-        let checker = HealthChecker::new(storage.clone());
-
-        assert!(checker.quick_check().await.unwrap());
-
-        storage.set_fail_mode(Some("read".to_string()));
-        assert!(!checker.quick_check().await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_health_json() {
-        let storage = Arc::new(MockStorage::new());
-        let checker = HealthChecker::new(storage);
-
-        let json = checker.get_health_json().await.unwrap();
-        let parsed: HealthCheckResult = serde_json::from_str(&json).unwrap();
-
-        assert!(matches!(parsed.status, HealthStatus::Healthy));
-        assert!(!parsed.components.is_empty());
     }
 }

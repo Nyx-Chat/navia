@@ -3,14 +3,11 @@
 //! This module provides DIDComm messaging with validation, audit logging, and storage abstraction.
 //! Uses navia_messaging types but adds additional safety and observability features.
 
+use crate::askardb::AskarDB;
 use crate::core::audit::{audit_log, SecurityEvent};
 use crate::core::didcomm::message::{Message, MessageBody};
-use crate::core::storage::traits::{MessageStorage, SecretStorage};
 use crate::core::validation::{validate_did, validate_uri};
-use crate::error::{
-    DidError, NaviaError, NaviaResult, PackingError, SerializationError, UnpackingError,
-};
-use crate::{AskarDIDResolver, AskarSecretsResolver};
+use crate::error::{DidError, NaviaError, NaviaResult, PackingError, UnpackingError};
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
 use did_peer::{
     DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys, DIDPeerService, DIDService,
@@ -20,6 +17,8 @@ use navia_didcomm::{
     Message as DIDCommMessage, PackEncryptedMetadata, PackEncryptedOptions, UnpackMetadata,
     UnpackOptions,
 };
+use navia_messaging::resolvers::did::AskarDIDResolver;
+use navia_messaging::resolvers::secrets::AskarSecretsResolver;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -28,41 +27,29 @@ use zeroize::Zeroize;
 /// Storage category constant for secret materials
 pub const CATEGORY_SECRET: &str = "secret";
 
-/// Core DIDComm messaging handler with validation, audit logging, and storage abstraction.
-pub struct DidcommMessaging<S>
-where
-    S: MessageStorage + SecretStorage,
-{
-    pub storage: Arc<S>,
+/// Core DIDComm messaging handler with validation, audit logging, and AskarDB storage.
+pub struct DidcommMessaging {
+    pub db: Arc<AskarDB>,
     did_resolver: AskarDIDResolver,
-    secrets_resolver: AskarSecretsResolver<S>,
+    secrets_resolver: AskarSecretsResolver,
 }
 
-impl<S> DidcommMessaging<S>
-where
-    S: MessageStorage + SecretStorage,
-{
+impl DidcommMessaging {
     /// Creates a new DIDComm messaging handler.
-    pub fn new(storage: Arc<S>, didcache_client: DIDCacheClient) -> Self {
+    pub fn new(db: Arc<AskarDB>, didcache_client: DIDCacheClient) -> Self {
         Self {
-            storage: storage.clone(),
+            db: db.clone(),
             did_resolver: AskarDIDResolver::new(didcache_client),
-            secrets_resolver: AskarSecretsResolver::new(storage),
+            secrets_resolver: AskarSecretsResolver::new(db),
         }
     }
 
     /// Stores a secret (private key) in the encrypted storage.
     pub async fn add_secret(&self, secret: &Secret) -> NaviaResult<()> {
-        let secret_bytes = serde_json::to_vec(secret).map_err(|e| {
-            NaviaError::Serialization(SerializationError::JsonError {
-                context: "serializing secret".to_string(),
-                details: e.to_string(),
-            })
-        })?;
-        self.storage
-            .store_secret(&secret.id, &secret_bytes)
+        self.db
+            .insert(CATEGORY_SECRET, &secret.id, secret)
             .await
-            .map_err(|e| e.into())
+            .map_err(|e| NaviaError::External(e.to_string()))
     }
 
     /// Stores multiple secrets in the encrypted storage.

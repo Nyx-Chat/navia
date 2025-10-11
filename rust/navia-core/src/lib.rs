@@ -76,11 +76,6 @@ mod error;
 pub mod core;
 pub mod ffi;
 
-// Re-export implementations from navia-messaging
-pub use navia_messaging::resolvers::did::AskarDIDResolver;
-pub use navia_messaging::resolvers::secrets::AskarSecretsResolver;
-pub use navia_messaging::storage::AskarStorage;
-
 // Re-export the FFI interface for UniFFI
 pub use ffi::{DidComInterface, DidCommError};
 

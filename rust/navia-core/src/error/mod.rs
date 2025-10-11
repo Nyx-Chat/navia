@@ -9,6 +9,6 @@ pub mod unified;
 
 // Re-export the unified error system
 pub use self::specific::{
-    DidError, PackingError, SerializationError, StorageError, UnpackingError, ValidationError,
+    DidError, PackingError, SerializationError, UnpackingError, ValidationError,
 };
 pub use self::unified::{NaviaError, NaviaResult};
