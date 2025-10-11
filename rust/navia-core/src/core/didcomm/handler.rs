@@ -10,8 +10,7 @@ use crate::core::validation::{validate_did, validate_uri};
 use crate::error::{
     DidError, NaviaError, NaviaResult, PackingError, SerializationError, UnpackingError,
 };
-use crate::infrastructure::resolvers::did::AskarDIDResolver;
-use crate::infrastructure::resolvers::secrets::AskarSecretsResolver;
+use crate::infrastructure::{AskarDIDResolver, AskarSecretsResolver};
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
 use did_peer::{
     DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys, DIDPeerService, DIDService,

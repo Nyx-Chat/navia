@@ -1,7 +1,10 @@
 //! Infrastructure layer - External system integrations
 //!
-//! This module contains implementations that integrate with
-//! external systems like databases and runtime environments.
+//! This module re-exports implementations from navia-messaging to avoid code duplication.
 
-pub mod resolvers;
-pub mod storage;
+// Re-export resolvers
+pub use navia_messaging::resolvers::did::AskarDIDResolver;
+pub use navia_messaging::resolvers::secrets::AskarSecretsResolver;
+
+// Re-export storage
+pub use navia_messaging::storage::AskarStorage;
