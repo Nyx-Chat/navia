@@ -8,9 +8,6 @@ use crate::core::constants::*;
 use crate::error::{NaviaResult, ValidationError};
 use std::time::SystemTime;
 
-/// Maximum number of recipients allowed in a single message
-pub const MAX_RECIPIENTS: usize = 100;
-
 /// Checks if a character is valid for storage identifiers (alphanumeric, dash, or underscore)
 #[inline]
 fn is_valid_storage_char(c: char) -> bool {
@@ -177,36 +174,6 @@ pub fn validate_seed(seed: &[u8]) -> NaviaResult<()> {
             reason: format!("Seed exceeds maximum length of {MAX_SEED_LENGTH} bytes"),
         }
         .into());
-    }
-
-    Ok(())
-}
-
-/// Validates a list of recipients
-///
-/// Ensures:
-/// - The list is not empty
-/// - Does not exceed the maximum number of recipients
-/// - Each recipient DID is valid
-pub fn validate_recipients(recipients: &[String]) -> NaviaResult<()> {
-    if recipients.is_empty() {
-        return Err(ValidationError::InvalidDid {
-            value: "recipients list".to_string(),
-            reason: "At least one recipient is required".to_string(),
-        }
-        .into());
-    }
-
-    if recipients.len() > MAX_RECIPIENTS {
-        return Err(ValidationError::SizeExceeded {
-            name: "recipients list".to_string(),
-            max_size: MAX_RECIPIENTS,
-        }
-        .into());
-    }
-
-    for recipient in recipients {
-        validate_did(recipient)?;
     }
 
     Ok(())

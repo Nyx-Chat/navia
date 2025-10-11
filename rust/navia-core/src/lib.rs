@@ -69,8 +69,8 @@
 //! - **16KB Alignment**: Optimized for Android 15+ requirements
 
 // Internal modules
-pub mod error;
 pub mod core;
+pub mod error;
 
 // FFI layer (only public interface)
 pub mod ffi;

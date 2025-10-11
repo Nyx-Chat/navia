@@ -8,7 +8,6 @@ use crate::core::didcomm::message::{Message, MessageBody};
 use crate::core::validation::{validate_did, validate_uri};
 use crate::error::{DidError, NaviaError, NaviaResult, PackingError, UnpackingError};
 use affinidi_did_resolver_cache_sdk::DIDCacheClient;
-use navia_messaging::askardb::AskarDB;
 use did_peer::{
     DIDPeer, DIDPeerCreateKeys, DIDPeerKeyType, DIDPeerKeys, DIDPeerService, DIDService,
 };
@@ -17,6 +16,7 @@ use navia_didcomm::{
     Message as DIDCommMessage, PackEncryptedMetadata, PackEncryptedOptions, UnpackMetadata,
     UnpackOptions,
 };
+use navia_messaging::askardb::AskarDB;
 use navia_messaging::resolvers::did::AskarDIDResolver;
 use navia_messaging::resolvers::secrets::AskarSecretsResolver;
 use serde_json::json;

@@ -4,8 +4,8 @@
 //! ensuring all components work together correctly.
 
 use futures::executor::block_on;
-use navia_core::DidComInterface;
 use navia_core::ffi::types::{DIDCommMessage, KeyValue};
+use navia_core::DidComInterface;
 use tempfile::TempDir;
 use zeroize::Zeroize;
 
