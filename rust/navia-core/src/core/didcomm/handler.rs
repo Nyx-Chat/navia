@@ -60,7 +60,10 @@ where
                 details: e.to_string(),
             })
         })?;
-        self.storage.store_secret(&secret.id, &secret_bytes).await
+        self.storage
+            .store_secret(&secret.id, &secret_bytes)
+            .await
+            .map_err(|e| e.into())
     }
 
     /// Stores multiple secrets in the encrypted storage.

@@ -259,13 +259,18 @@ mod tests {
 
     #[async_trait]
     impl MessageStorage for MockStorage {
-        async fn insert(&self, category: &str, key: &str, value: &str) -> NaviaResult<()> {
+        async fn insert(
+            &self,
+            category: &str,
+            key: &str,
+            value: &str,
+        ) -> Result<(), navia_messaging::error::Error> {
             if let Some(ref mode) = *self.fail_mode.lock().unwrap() {
                 if mode == "write" {
-                    return Err(NaviaError::Storage(StorageError::OperationFailed {
-                        operation: "insert".to_string(),
-                        details: "Mock failure".to_string(),
-                    }));
+                    return Err(navia_messaging::error::Error::msg(
+                        navia_messaging::error::ErrorKind::InvalidState,
+                        "Mock failure",
+                    ));
                 }
             }
 
@@ -276,13 +281,17 @@ mod tests {
             Ok(())
         }
 
-        async fn get(&self, category: &str, key: &str) -> NaviaResult<Option<String>> {
+        async fn get(
+            &self,
+            category: &str,
+            key: &str,
+        ) -> Result<Option<String>, navia_messaging::error::Error> {
             if let Some(ref mode) = *self.fail_mode.lock().unwrap() {
                 if mode == "read" {
-                    return Err(NaviaError::Storage(StorageError::OperationFailed {
-                        operation: "get".to_string(),
-                        details: "Mock failure".to_string(),
-                    }));
+                    return Err(navia_messaging::error::Error::msg(
+                        navia_messaging::error::ErrorKind::InvalidState,
+                        "Mock failure",
+                    ));
                 }
             }
 
@@ -290,11 +299,20 @@ mod tests {
             Ok(data.get(category).and_then(|cat| cat.get(key).cloned()))
         }
 
-        async fn update(&self, category: &str, key: &str, value: &str) -> NaviaResult<()> {
+        async fn update(
+            &self,
+            category: &str,
+            key: &str,
+            value: &str,
+        ) -> Result<(), navia_messaging::error::Error> {
             self.insert(category, key, value).await
         }
 
-        async fn remove(&self, category: &str, key: &str) -> NaviaResult<()> {
+        async fn remove(
+            &self,
+            category: &str,
+            key: &str,
+        ) -> Result<(), navia_messaging::error::Error> {
             let mut data = self.data.lock().unwrap();
             if let Some(cat) = data.get_mut(category) {
                 cat.remove(key);
@@ -305,15 +323,22 @@ mod tests {
 
     #[async_trait]
     impl SecretStorage for MockStorage {
-        async fn store_secret(&self, _id: &str, _secret: &[u8]) -> NaviaResult<()> {
+        async fn store_secret(
+            &self,
+            _id: &str,
+            _secret: &[u8],
+        ) -> Result<(), navia_messaging::error::Error> {
             Ok(())
         }
 
-        async fn get_secret(&self, _id: &str) -> NaviaResult<Option<Vec<u8>>> {
+        async fn get_secret(
+            &self,
+            _id: &str,
+        ) -> Result<Option<Vec<u8>>, navia_messaging::error::Error> {
             Ok(None)
         }
 
-        async fn delete_secret(&self, _id: &str) -> NaviaResult<()> {
+        async fn delete_secret(&self, _id: &str) -> Result<(), navia_messaging::error::Error> {
             Ok(())
         }
     }
