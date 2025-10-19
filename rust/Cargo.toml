@@ -6,17 +6,14 @@ resolver = "2"
 uniffi = "0.28.2"
 # Using our fork with security fixes and quantum resistance
 navia-didcomm = { git = "https://github.com/Nyx-Chat/navia-didcomm.git", branch = "main" }
-askar-storage = { git = "https://github.com/openwallet-foundation/askar.git", branch = "main" }
+navia-messaging = { git = "https://github.com/Nyx-Chat/navia-messaging.git", branch = "main"}
+askar-storage = { git = "https://github.com/openwallet-foundation/askar.git", tag = "v0.4.5" }
 async-trait = "0.1.83"
 serde_json = "1.0.132"
 serde = { version = "1.0.214", features = ["derive"] }
 did-peer = "0.6.3"
 affinidi-did-resolver-cache-sdk = "0.5.5"
-ssi-core = "0.2.2"
-ssi-dids-core = "0.1.2"
 thiserror = "2.0.6"
-tokio = { version = "1.46.1", features = ["rt", "rt-multi-thread", "macros"] }
-slab = "0.4.11"
-tracing-subscriber = "0.3.20"
+tokio = { version = "1.47", features = ["rt", "rt-multi-thread", "macros"] }
 tempfile = "3.8"
 zeroize = { version = "1.7", features = ["derive"] }

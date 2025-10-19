@@ -9,8 +9,4 @@ pub mod constants;
 pub mod didcomm;
 pub mod health;
 pub mod metrics;
-pub mod storage;
 pub mod validation;
-
-// Re-export commonly used types
-pub use storage::traits::{MessageStorage, SecretStorage};

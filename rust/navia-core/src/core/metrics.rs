@@ -98,17 +98,6 @@ impl MetricsCollector {
         result
     }
 
-    /// Time an async operation
-    pub async fn time_async_operation<F, R>(&self, name: &str, operation: F) -> R
-    where
-        F: std::future::Future<Output = R>,
-    {
-        let start = std::time::Instant::now();
-        let result = operation.await;
-        self.record_duration(name, start.elapsed());
-        result
-    }
-
     /// Log an error with context
     pub fn log_error(&self, operation: &str, error: &str) {
         if !self.is_enabled() {
@@ -125,103 +114,6 @@ impl MetricsCollector {
         };
 
         self.append_entry(entry);
-    }
-
-    /// Get metrics summary
-    pub fn get_summary(&self, since: SystemTime) -> MetricsSummary {
-        let entries = self.entries.read();
-        let mut summary = MetricsSummary {
-            start_time: since,
-            end_time: SystemTime::now(),
-            messages_packed: 0,
-            messages_unpacked: 0,
-            pack_errors: 0,
-            unpack_errors: 0,
-            avg_pack_time_ms: 0.0,
-            avg_unpack_time_ms: 0.0,
-            dids_generated: 0,
-            did_resolution_attempts: 0,
-            did_resolution_failures: 0,
-            storage_reads: 0,
-            storage_writes: 0,
-            storage_errors: 0,
-            avg_storage_read_ms: 0.0,
-            avg_storage_write_ms: 0.0,
-            total_operations: 0,
-            total_errors: 0,
-            error_rate: 0.0,
-            pack_durations: Vec::new(),
-            unpack_durations: Vec::new(),
-            storage_read_durations: Vec::new(),
-            storage_write_durations: Vec::new(),
-        };
-
-        // Count metrics since timestamp
-        for entry in entries.iter() {
-            if entry.timestamp < since {
-                continue;
-            }
-
-            match &entry.value {
-                MetricValue::Counter(_) => match entry.name.as_str() {
-                    "message.pack.total" => summary.messages_packed += 1,
-                    "message.unpack.total" => summary.messages_unpacked += 1,
-                    "message.pack.errors" => summary.pack_errors += 1,
-                    "message.unpack.errors" => summary.unpack_errors += 1,
-                    "did.generate.total" => summary.dids_generated += 1,
-                    "did.resolve.attempts" => summary.did_resolution_attempts += 1,
-                    "did.resolve.failures" => summary.did_resolution_failures += 1,
-                    "storage.read.total" => summary.storage_reads += 1,
-                    "storage.write.total" => summary.storage_writes += 1,
-                    "storage.errors" => summary.storage_errors += 1,
-                    "operations.total" => summary.total_operations += 1,
-                    "errors.total" => summary.total_errors += 1,
-                    _ => {}
-                },
-                MetricValue::Duration(d) => {
-                    let ms = d.as_millis() as f64;
-                    match entry.name.as_str() {
-                        "message.pack.duration" => {
-                            summary.pack_durations.push(ms);
-                        }
-                        "message.unpack.duration" => {
-                            summary.unpack_durations.push(ms);
-                        }
-                        "storage.read.duration" => {
-                            summary.storage_read_durations.push(ms);
-                        }
-                        "storage.write.duration" => {
-                            summary.storage_write_durations.push(ms);
-                        }
-                        _ => {}
-                    }
-                }
-                MetricValue::Error { .. } => {
-                    // Errors are logged for debugging, not counted in summary
-                    summary.total_errors += 1;
-                }
-            }
-        }
-
-        // Calculate averages
-        summary.avg_pack_time_ms = avg(&summary.pack_durations);
-        summary.avg_unpack_time_ms = avg(&summary.unpack_durations);
-        summary.avg_storage_read_ms = avg(&summary.storage_read_durations);
-        summary.avg_storage_write_ms = avg(&summary.storage_write_durations);
-
-        // Calculate error rate
-        if summary.total_operations > 0 {
-            summary.error_rate =
-                (summary.total_errors as f64 / summary.total_operations as f64) * 100.0;
-        }
-
-        // Clear the duration vectors as they're not needed in the output
-        summary.pack_durations.clear();
-        summary.unpack_durations.clear();
-        summary.storage_read_durations.clear();
-        summary.storage_write_durations.clear();
-
-        summary
     }
 
     /// Export metrics as JSON
@@ -305,60 +197,9 @@ impl MetricsCollector {
     }
 }
 
-/// Metrics summary
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MetricsSummary {
-    pub start_time: SystemTime,
-    pub end_time: SystemTime,
-
-    // Message operations
-    pub messages_packed: u64,
-    pub messages_unpacked: u64,
-    pub pack_errors: u64,
-    pub unpack_errors: u64,
-    pub avg_pack_time_ms: f64,
-    pub avg_unpack_time_ms: f64,
-
-    // DID operations
-    pub dids_generated: u64,
-    pub did_resolution_attempts: u64,
-    pub did_resolution_failures: u64,
-
-    // Storage operations
-    pub storage_reads: u64,
-    pub storage_writes: u64,
-    pub storage_errors: u64,
-    pub avg_storage_read_ms: f64,
-    pub avg_storage_write_ms: f64,
-
-    // System health
-    pub total_operations: u64,
-    pub total_errors: u64,
-    pub error_rate: f64,
-
-    // Internal vectors for calculating averages
-    #[serde(skip)]
-    pack_durations: Vec<f64>,
-    #[serde(skip)]
-    unpack_durations: Vec<f64>,
-    #[serde(skip)]
-    storage_read_durations: Vec<f64>,
-    #[serde(skip)]
-    storage_write_durations: Vec<f64>,
-}
-
-fn avg(values: &[f64]) -> f64 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f64>() / values.len() as f64
-    }
-}
-
 // Global metrics instance
-lazy_static::lazy_static! {
-    pub static ref METRICS: MetricsCollector = MetricsCollector::new();
-}
+pub static METRICS: once_cell::sync::Lazy<MetricsCollector> =
+    once_cell::sync::Lazy::new(MetricsCollector::new);
 
 #[cfg(test)]
 mod tests {

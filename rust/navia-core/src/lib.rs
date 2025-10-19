@@ -68,18 +68,16 @@
 //! - **Native Performance**: Rust core with minimal FFI overhead
 //! - **16KB Alignment**: Optimized for Android 15+ requirements
 
-// Internal modules - the old structure is still here for now
-// to ensure we don't break anything during refactoring
-mod askardb;
-mod error;
-
-// New architecture modules
+// Internal modules
 pub mod core;
+pub mod error;
+
+// FFI layer (only public interface)
 pub mod ffi;
-pub mod infrastructure;
 
 // Re-export the FFI interface for UniFFI
-pub use ffi::{DidComInterface, DidCommError};
+pub use ffi::interface::DidComInterface;
+pub use ffi::types::DidCommError;
 
 // Set up UniFFI scaffolding
 uniffi::setup_scaffolding!();

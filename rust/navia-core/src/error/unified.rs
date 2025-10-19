@@ -107,3 +107,12 @@ impl From<askar_storage::Error> for NaviaError {
         })
     }
 }
+
+impl From<navia_messaging::error::Error> for NaviaError {
+    fn from(err: navia_messaging::error::Error) -> Self {
+        NaviaError::Storage(StorageError::OperationFailed {
+            operation: "navia_messaging".to_string(),
+            details: err.to_string(),
+        })
+    }
+}

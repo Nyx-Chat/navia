@@ -4,7 +4,8 @@
 //! ensuring all components work together correctly.
 
 use futures::executor::block_on;
-use navia_core::ffi::{DIDCommMessage, DidComInterface};
+use navia_core::ffi::types::{DIDCommMessage, KeyValue};
+use navia_core::DidComInterface;
 use tempfile::TempDir;
 use zeroize::Zeroize;
 
@@ -167,17 +168,17 @@ fn test_batch_operations() {
 
     // Test batch insert
     let items = vec![
-        navia_core::ffi::KeyValue {
+        KeyValue {
             key: "key1".to_string(),
             value: "value1".to_string(),
             metadata: None,
         },
-        navia_core::ffi::KeyValue {
+        KeyValue {
             key: "key2".to_string(),
             value: "value2".to_string(),
             metadata: Some("test-metadata".to_string()),
         },
-        navia_core::ffi::KeyValue {
+        KeyValue {
             key: "key3".to_string(),
             value: "value3".to_string(),
             metadata: None,

@@ -4,7 +4,8 @@
 //! and returns appropriate error messages.
 
 use futures::executor::block_on;
-use navia_core::ffi::{DIDCommMessage, DidComInterface, DidCommError};
+use navia_core::ffi::types::DIDCommMessage;
+use navia_core::{DidComInterface, DidCommError};
 use tempfile::TempDir;
 use zeroize::Zeroize;
 

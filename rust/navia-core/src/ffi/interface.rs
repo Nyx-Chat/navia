@@ -3,18 +3,16 @@
 //! This module provides the UniFFI-exposed interface that Kotlin/Swift
 //! applications use to interact with the navia library.
 
-use crate::askardb::AskarDB;
 use crate::core::audit::{audit_log, SecurityEvent, StorageOperation};
 use crate::core::didcomm::handler::DidcommMessaging;
 use crate::core::didcomm::message::Message;
-use crate::core::storage::traits::MessageStorage;
 use crate::core::validation::{
     validate_message_body, validate_seed, validate_storage_category, validate_storage_key,
 };
 use crate::ffi::types::{DIDCommMessage, DidCommError, KeyValue};
-use crate::infrastructure::storage::askar_storage::AskarStorage;
 use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
 use askar_storage::generate_raw_store_key;
+use navia_messaging::askardb::AskarDB;
 use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
 use tokio::runtime::{Handle, Runtime};
@@ -68,7 +66,7 @@ use zeroize::Zeroize;
 #[derive(uniffi::Object)]
 pub struct DidComInterface {
     /// Thread-safe storage for the DIDComm messaging handler
-    didcomm_messaging: RwLock<Option<Arc<DidcommMessaging<AskarStorage>>>>,
+    didcomm_messaging: RwLock<Option<Arc<DidcommMessaging>>>,
     /// Dedicated Tokio runtime for async operations
     pub(crate) runtime: Arc<Runtime>,
 }
@@ -76,7 +74,7 @@ pub struct DidComInterface {
 // Helper methods for DidComInterface
 impl DidComInterface {
     /// Gets the messaging handler if initialized, otherwise returns an error
-    fn get_messaging(&self) -> Result<Arc<DidcommMessaging<AskarStorage>>, DidCommError> {
+    fn get_messaging(&self) -> Result<Arc<DidcommMessaging>, DidCommError> {
         let lock = self.didcomm_messaging.read().unwrap();
         lock.as_ref()
             .ok_or(DidCommError::GeneralError {
@@ -94,14 +92,14 @@ impl DidComInterface {
 
     /// Fetches multiple values from storage and converts them to KeyValue objects
     async fn fetch_batch_as_keyvalues(
-        messaging: &Arc<DidcommMessaging<AskarStorage>>,
+        messaging: &Arc<DidcommMessaging>,
         category: &str,
         keys: Vec<String>,
     ) -> Result<Vec<KeyValue>, DidCommError> {
         let mut results = Vec::new();
         for key in keys {
             let value = messaging
-                .storage
+                .db
                 .get(category, &key)
                 .await
                 .map_err(Self::map_db_error)?;
@@ -206,7 +204,7 @@ impl DidComInterface {
             // Check if we're already in a Tokio context
             let (db, client) = if Handle::try_current().is_ok() {
                 // We're in a context, proceed normally
-                let db = AskarDB::provision(&path, store_key)
+                let db = AskarDB::provision_sqlite(&path, store_key)
                     .await
                     .map_err(Self::map_db_error)?;
 
@@ -223,7 +221,7 @@ impl DidComInterface {
                 let path_clone = path.clone();
 
                 let handle = runtime.spawn(async move {
-                    let db = AskarDB::provision(&path_clone, store_key)
+                    let db = AskarDB::provision_sqlite(&path_clone, store_key)
                         .await
                         .map_err(|e| crate::error::NaviaError::External(e.to_string()))?;
                     let client = DIDCacheClient::new(DIDCacheConfigBuilder::default().build())
@@ -240,8 +238,7 @@ impl DidComInterface {
                     .map_err(Self::map_db_error)?
             };
 
-            let storage = Arc::new(AskarStorage::new(Arc::new(db)));
-            let messaging = Arc::new(DidcommMessaging::new(storage, client));
+            let messaging = Arc::new(DidcommMessaging::new(Arc::new(db), client));
 
             self.didcomm_messaging.write().unwrap().replace(messaging);
 
@@ -577,15 +574,15 @@ impl DidComInterface {
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
             messaging
-                .storage
+                .db
                 .insert(&category, &name, &value)
                 .await
                 .map_err(Self::map_db_error)
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle = runtime
-                .spawn(async move { messaging.storage.insert(&category, &name, &value).await });
+            let handle =
+                runtime.spawn(async move { messaging.db.insert(&category, &name, &value).await });
 
             handle
                 .await
@@ -641,7 +638,7 @@ impl DidComInterface {
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
             let result = messaging
-                .storage
+                .db
                 .get(&category, &name)
                 .await
                 .map_err(Self::map_db_error)?;
@@ -649,8 +646,7 @@ impl DidComInterface {
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle =
-                runtime.spawn(async move { messaging.storage.get(&category, &name).await });
+            let handle = runtime.spawn(async move { messaging.db.get(&category, &name).await });
 
             let result = handle
                 .await
@@ -691,15 +687,14 @@ impl DidComInterface {
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
             messaging
-                .storage
+                .db
                 .remove(&category, &name)
                 .await
                 .map_err(Self::map_db_error)
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle =
-                runtime.spawn(async move { messaging.storage.remove(&category, &name).await });
+            let handle = runtime.spawn(async move { messaging.db.remove(&category, &name).await });
 
             handle
                 .await
@@ -746,15 +741,15 @@ impl DidComInterface {
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
             messaging
-                .storage
+                .db
                 .update(&category, &name, &value)
                 .await
                 .map_err(Self::map_db_error)
         } else {
             // Use our runtime
             let runtime = self.runtime.clone();
-            let handle = runtime
-                .spawn(async move { messaging.storage.update(&category, &name, &value).await });
+            let handle =
+                runtime.spawn(async move { messaging.db.update(&category, &name, &value).await });
 
             handle
                 .await
@@ -813,7 +808,7 @@ impl DidComInterface {
         if Handle::try_current().is_ok() {
             for item in items {
                 messaging
-                    .storage
+                    .db
                     .insert(&category, &item.key, &item.value)
                     .await
                     .map_err(Self::map_db_error)?;
@@ -825,7 +820,7 @@ impl DidComInterface {
             let handle = runtime.spawn(async move {
                 for item in items {
                     messaging
-                        .storage
+                        .db
                         .insert(&category, &item.key, &item.value)
                         .await
                         .map_err(Self::map_db_error)?;
@@ -941,7 +936,7 @@ impl DidComInterface {
                 message: "Database not opened".to_string(),
             })?;
 
-        let health_checker = crate::core::health::HealthChecker::new(messaging.storage.clone());
+        let health_checker = crate::core::health::HealthChecker::new(messaging.db.clone());
 
         if Handle::try_current().is_ok() {
             health_checker
@@ -990,7 +985,7 @@ impl DidComInterface {
             Err(_) => return false,
         };
 
-        let health_checker = crate::core::health::HealthChecker::new(messaging.storage.clone());
+        let health_checker = crate::core::health::HealthChecker::new(messaging.db.clone());
 
         if Handle::try_current().is_ok() {
             health_checker.is_healthy().await

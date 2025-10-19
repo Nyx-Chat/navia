@@ -1,6 +1,6 @@
 [package]
 name = "navia-core"
-version = "1.2.8"
+version = "1.2.9"
 edition = "2021"
 
 [[bin]]
@@ -33,23 +33,19 @@ path = "../../examples/advanced/complete_api.rs"
 [dependencies]
 uniffi.workspace = true
 navia-didcomm.workspace = true
+navia-messaging.workspace = true
 askar-storage.workspace = true
 async-trait.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 did-peer.workspace = true
 affinidi-did-resolver-cache-sdk.workspace = true
-ssi-core.workspace = true
-ssi-dids-core.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 zeroize.workspace = true
 once_cell = "1.21.3"
 uuid = { version = "1.17.0", features = ["v4"] }
 parking_lot = "0.12.4"
-lazy_static = "1.5.0"
-slab.workspace = true
-tracing-subscriber.workspace = true
 
 
 [features]
