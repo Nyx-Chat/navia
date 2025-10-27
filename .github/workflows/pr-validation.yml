@@ -146,7 +146,7 @@ jobs:
           xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk ${{ matrix.sdk }} -arch arm64 -derivedDataPath build/DerivedData BUILD_LIBRARY_FOR_DISTRIBUTION=YES build
       
       - name: Upload iOS artifacts (${{ matrix.target }})
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ios-${{ matrix.target }}
           path: |
@@ -200,7 +200,7 @@ jobs:
           ls -la ios/build/DerivedData/Build/Products/*/
       
       - name: Upload final iOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ios-build-artifacts
           path: |
@@ -304,7 +304,7 @@ jobs:
           fi
       
       - name: Upload Android artifact (${{ matrix.arch }})
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: android-lib-${{ matrix.arch }}
           path: android/src/main/jniLibs/${{ matrix.arch }}/libnavia_core.so
@@ -365,7 +365,7 @@ jobs:
           sleep 5
       
       - name: Upload final Android artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: android-build-artifacts
           path: |
