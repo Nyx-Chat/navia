@@ -25,7 +25,7 @@ jobs:
       docs: ${{ steps.changes.outputs.docs }}
       workflows: ${{ steps.changes.outputs.workflows }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           
@@ -55,7 +55,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -88,7 +88,7 @@ jobs:
     needs: [changes, quick-checks]
     if: needs.changes.outputs.rust == 'true' && !cancelled() && !failure()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -124,7 +124,7 @@ jobs:
             sdk: iphonesimulator
             config: Release-iphonesimulator
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -161,7 +161,7 @@ jobs:
     needs: [changes, ios-build]
     if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true') && !cancelled() && !failure()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -240,7 +240,7 @@ jobs:
           sudo apt-get clean
           df -h
       
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -317,7 +317,7 @@ jobs:
     needs: [changes, android-build]
     if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.android == 'true') && !cancelled() && !failure()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -382,7 +382,7 @@ jobs:
     needs: [changes, quick-checks]
     if: needs.changes.outputs.rust == 'true' && !cancelled() && !failure()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
