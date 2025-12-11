@@ -16,7 +16,7 @@ fn test_health_check_integration() {
         .to_string();
 
     // Create interface
-    let interface = DidComInterface::new(db_path.clone());
+    let interface = DidComInterface::new(db_path.clone(), "did:peer:test-mediator".to_string());
 
     // Before opening, health check should indicate not healthy
     assert!(!block_on(interface.is_healthy()));
@@ -60,7 +60,10 @@ fn test_health_check_integration() {
 fn test_health_check_before_init() {
     use futures::executor::block_on;
 
-    let interface = DidComInterface::new("unused_path".to_string());
+    let interface = DidComInterface::new(
+        "unused_path".to_string(),
+        "did:peer:test-mediator".to_string(),
+    );
 
     // Should not be healthy before initialization
     assert!(!block_on(interface.is_healthy()));

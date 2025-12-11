@@ -18,7 +18,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let db_path = temp_dir.path().join("test.db");
 
     // Create interface
-    let interface = DidComInterface::new(db_path.to_string_lossy().to_string());
+    let interface = DidComInterface::new(
+        db_path.to_string_lossy().to_string(),
+        "did:peer:test-mediator".to_string(),
+    );
 
     // Initialize with a secure seed (use proper randomness in production!)
     let seed = vec![42u8; 32];
@@ -52,7 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Pack (encrypt) the message
     println!("\nPacking message...");
     let packed = interface
-        .pack(message.clone(), alice_did.clone(), bob_did.clone())
+        .pack(message.clone(), alice_did.clone(), vec![bob_did.clone()])
         .await?;
     println!("Packed message length: {} bytes", packed.len());
 

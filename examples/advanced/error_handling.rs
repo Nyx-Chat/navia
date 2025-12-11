@@ -14,7 +14,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("errors.db");
 
-    let interface = DidComInterface::new(db_path.to_string_lossy().to_string());
+    let interface = DidComInterface::new(
+        db_path.to_string_lossy().to_string(),
+        "did:peer:test-mediator".to_string(),
+    );
 
     // Example 1: Database initialization errors
     println!("=== Database Initialization Errors ===");
@@ -74,7 +77,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .pack(
             bad_message,
             alice_did.clone(),
-            "".to_string(), // Empty recipient!
+            vec![], // Empty recipient list!
         )
         .await
     {

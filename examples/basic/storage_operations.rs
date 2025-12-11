@@ -15,7 +15,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("storage.db");
 
-    let interface = DidComInterface::new(db_path.to_string_lossy().to_string());
+    let interface = DidComInterface::new(
+        db_path.to_string_lossy().to_string(),
+        "did:peer:test-mediator".to_string(),
+    );
     let seed = vec![42u8; 32];
     interface
         .open(db_path.to_string_lossy().to_string(), seed)

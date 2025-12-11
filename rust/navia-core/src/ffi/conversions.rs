@@ -5,6 +5,7 @@
 
 use crate::core::didcomm::message::{Message, MessageBody};
 use crate::ffi::types::{DIDCommMessage, KeyValue};
+use navia_didcomm::Message as NaviaMessage;
 
 /// Converts FFI DIDCommMessage to a core Message type.
 ///
@@ -93,6 +94,24 @@ impl From<(String, String)> for KeyValue {
             key: tuple.0,
             value: tuple.1,
             metadata: None,
+        }
+    }
+}
+
+/// Converts navia_didcomm Message to FFI DIDCommMessage type.
+///
+/// This conversion is used when unpacking messages received from
+/// the navia-messaging library.
+impl From<NaviaMessage> for DIDCommMessage {
+    fn from(msg: NaviaMessage) -> Self {
+        let body = serde_json::to_string(&msg.body).unwrap_or_else(|_| "{}".to_string());
+
+        DIDCommMessage {
+            id: msg.id,
+            msg_type: msg.type_,
+            body,
+            from: msg.from,
+            to: msg.to.unwrap_or_default(),
         }
     }
 }

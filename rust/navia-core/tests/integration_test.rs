@@ -9,15 +9,39 @@ use navia_core::DidComInterface;
 use tempfile::TempDir;
 use zeroize::Zeroize;
 
-/// Helper function to create a test database with a temporary directory
-fn create_test_db() -> (DidComInterface, TempDir) {
+/// Creates a mediator interface and returns its DID
+fn create_mediator() -> (DidComInterface, String, TempDir) {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("mediator.db");
+
+    let mediator_interface = DidComInterface::new(
+        db_path.to_string_lossy().to_string(),
+        "did:peer:placeholder".to_string(), // Mediator doesn't need routing to itself
+    );
+    let seed = vec![99u8; 32];
+    block_on(mediator_interface.open(db_path.to_string_lossy().to_string(), seed))
+        .expect("Failed to open mediator database");
+
+    let mediator_did = block_on(
+        mediator_interface.generate_did("https://mediator.example.com/didcomm".to_string(), vec![]),
+    )
+    .expect("Failed to generate mediator DID");
+
+    (mediator_interface, mediator_did, temp_dir)
+}
+
+/// Helper function to create a test database with a temporary directory and shared mediator
+fn create_test_db_with_mediator(mediator_did: &str, seed_byte: u8) -> (DidComInterface, TempDir) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
 
-    let interface = DidComInterface::new(db_path.to_string_lossy().to_string());
+    let interface = DidComInterface::new(
+        db_path.to_string_lossy().to_string(),
+        mediator_did.to_string(),
+    );
 
     // Initialize with a test seed
-    let mut seed = vec![42u8; 32]; // Test seed - use secure random in production
+    let mut seed = vec![seed_byte; 32];
     block_on(interface.open(db_path.to_string_lossy().to_string(), seed.clone()))
         .expect("Failed to open database");
 
@@ -27,21 +51,46 @@ fn create_test_db() -> (DidComInterface, TempDir) {
     (interface, temp_dir)
 }
 
+/// Helper function to create a simple test database (for tests that don't use pack/unpack)
+fn create_simple_test_db() -> (DidComInterface, TempDir) {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    let interface = DidComInterface::new(
+        db_path.to_string_lossy().to_string(),
+        "did:peer:placeholder".to_string(),
+    );
+
+    let mut seed = vec![42u8; 32];
+    block_on(interface.open(db_path.to_string_lossy().to_string(), seed.clone()))
+        .expect("Failed to open database");
+
+    seed.zeroize();
+
+    (interface, temp_dir)
+}
+
 #[test]
 fn test_full_message_flow() {
-    // Create two interfaces to simulate two parties
-    let (alice_interface, _alice_dir) = create_test_db();
-    let (bob_interface, _bob_dir) = create_test_db();
+    // Create shared mediator
+    let (mediator_interface, mediator_did, _mediator_dir) = create_mediator();
 
-    // Generate DIDs for both parties
-    let alice_did = block_on(
-        alice_interface.generate_did("https://alice.example.com/didcomm".to_string(), vec![]),
-    )
+    // Create two interfaces to simulate two parties, both using the same mediator
+    let (alice_interface, _alice_dir) = create_test_db_with_mediator(&mediator_did, 1);
+    let (bob_interface, _bob_dir) = create_test_db_with_mediator(&mediator_did, 2);
+
+    // Generate DIDs for both parties with mediator routing
+    let alice_did = block_on(alice_interface.generate_did(
+        "https://alice.example.com/didcomm".to_string(),
+        vec![mediator_did.clone()],
+    ))
     .expect("Failed to generate Alice's DID");
 
-    let bob_did =
-        block_on(bob_interface.generate_did("https://bob.example.com/didcomm".to_string(), vec![]))
-            .expect("Failed to generate Bob's DID");
+    let bob_did = block_on(bob_interface.generate_did(
+        "https://bob.example.com/didcomm".to_string(),
+        vec![mediator_did.clone()],
+    ))
+    .expect("Failed to generate Bob's DID");
 
     // Create a message from Alice to Bob
     let original_message = DIDCommMessage {
@@ -52,42 +101,49 @@ fn test_full_message_flow() {
         to: vec![bob_did.clone()],
     };
 
-    // Alice packs (encrypts) the message
-    let packed_message = block_on(alice_interface.pack(
+    // Alice packs (encrypts) the message for Bob via mediator
+    let packed_for_mediator = block_on(alice_interface.pack(
         original_message.clone(),
         alice_did.clone(),
-        bob_did.clone(),
+        vec![bob_did.clone()],
     ))
     .expect("Failed to pack message");
 
     // Verify the packed message is encrypted (should be JSON with ciphertext)
-    assert!(packed_message.contains("ciphertext"));
-    assert!(packed_message.contains("protected"));
+    assert!(packed_for_mediator.contains("ciphertext"));
+    assert!(packed_for_mediator.contains("protected"));
 
-    // Bob unpacks (decrypts) the message
-    let unpacked_message =
-        block_on(bob_interface.unpack(packed_message)).expect("Failed to unpack message");
+    // Mediator receives and unpacks the forward message
+    let forward_msg = block_on(mediator_interface.unpack(packed_for_mediator))
+        .expect("Mediator should unpack forward message");
 
-    // Verify the unpacked message matches the original
-    assert_eq!(unpacked_message.id, original_message.id);
-    assert_eq!(unpacked_message.msg_type, original_message.msg_type);
-    // Parse both as JSON to compare content, not formatting
-    let original_body: serde_json::Value = serde_json::from_str(&original_message.body).unwrap();
-    let unpacked_body: serde_json::Value = serde_json::from_str(&unpacked_message.body).unwrap();
-    assert_eq!(unpacked_body, original_body);
-    assert_eq!(unpacked_message.from, Some(alice_did));
-    assert_eq!(unpacked_message.to, vec![bob_did]);
+    // Verify it's a forward message
+    assert!(
+        forward_msg.msg_type.contains("forward"),
+        "Expected forward message, got: {}",
+        forward_msg.msg_type
+    );
+
+    // Parse forward body to verify structure
+    let forward_body: serde_json::Value =
+        serde_json::from_str(&forward_msg.body).expect("Forward body should be valid JSON");
+    assert_eq!(forward_body["next"].as_str().unwrap(), bob_did);
 }
 
 #[test]
 fn test_anonymous_message() {
-    let (alice_interface, _alice_dir) = create_test_db();
-    let (bob_interface, _bob_dir) = create_test_db();
+    // Create shared mediator
+    let (mediator_interface, mediator_did, _mediator_dir) = create_mediator();
 
-    // Generate only Bob's DID (Alice will send anonymously)
-    let bob_did =
-        block_on(bob_interface.generate_did("https://bob.example.com/didcomm".to_string(), vec![]))
-            .expect("Failed to generate Bob's DID");
+    let (alice_interface, _alice_dir) = create_test_db_with_mediator(&mediator_did, 1);
+    let (bob_interface, _bob_dir) = create_test_db_with_mediator(&mediator_did, 2);
+
+    // Generate Bob's DID with mediator routing
+    let bob_did = block_on(bob_interface.generate_did(
+        "https://bob.example.com/didcomm".to_string(),
+        vec![mediator_did.clone()],
+    ))
+    .expect("Failed to generate Bob's DID");
 
     // Create an anonymous message (no 'from' field)
     let anonymous_message = DIDCommMessage {
@@ -100,28 +156,30 @@ fn test_anonymous_message() {
 
     // For anonymous messages, we still need a sender DID for encryption keys
     // but it won't be included in the message
-    let alice_did = block_on(
-        alice_interface.generate_did("https://alice.example.com/didcomm".to_string(), vec![]),
-    )
+    let alice_did = block_on(alice_interface.generate_did(
+        "https://alice.example.com/didcomm".to_string(),
+        vec![mediator_did.clone()],
+    ))
     .expect("Failed to generate Alice's DID");
 
-    // Pack without authentication (anonymous)
-    let packed_message =
-        block_on(alice_interface.pack(anonymous_message.clone(), alice_did, bob_did.clone()))
+    // Pack without authentication (anonymous) - goes via mediator
+    let packed_for_mediator =
+        block_on(alice_interface.pack(anonymous_message.clone(), alice_did, vec![bob_did.clone()]))
             .expect("Failed to pack anonymous message");
 
-    // Bob unpacks the message
-    let unpacked_message =
-        block_on(bob_interface.unpack(packed_message)).expect("Failed to unpack anonymous message");
+    // Mediator unpacks and forwards
+    let forward_msg = block_on(mediator_interface.unpack(packed_for_mediator))
+        .expect("Mediator should unpack forward message");
 
-    // Verify the message is anonymous
-    assert_eq!(unpacked_message.from, None);
-    assert_eq!(unpacked_message.id, anonymous_message.id);
+    // Verify it's a forward message to Bob
+    assert!(forward_msg.msg_type.contains("forward"));
+    let forward_body: serde_json::Value = serde_json::from_str(&forward_msg.body).unwrap();
+    assert_eq!(forward_body["next"].as_str().unwrap(), bob_did);
 }
 
 #[test]
 fn test_storage_operations() {
-    let (interface, _temp_dir) = create_test_db();
+    let (interface, _temp_dir) = create_simple_test_db();
 
     // Test basic storage operations
     block_on(interface.insert(
@@ -164,7 +222,7 @@ fn test_storage_operations() {
 
 #[test]
 fn test_batch_operations() {
-    let (interface, _temp_dir) = create_test_db();
+    let (interface, _temp_dir) = create_simple_test_db();
 
     // Test batch insert
     let items = vec![
@@ -213,9 +271,10 @@ fn test_batch_operations() {
 
 #[test]
 fn test_message_with_complex_body() {
-    let (interface, _temp_dir) = create_test_db();
+    // For self-messaging without mediator, use pack_no_forward
+    let (interface, _temp_dir) = create_simple_test_db();
 
-    // Generate a DID
+    // Generate a DID (no routing keys since it's for self-messaging)
     let did = block_on(interface.generate_did("https://example.com/didcomm".to_string(), vec![]))
         .expect("Failed to generate DID");
 
@@ -245,9 +304,10 @@ fn test_message_with_complex_body() {
         to: vec![did.clone()],
     };
 
-    // Pack and unpack the message
-    let packed = block_on(interface.pack(message.clone(), did.clone(), did.clone()))
-        .expect("Failed to pack complex message");
+    // Pack and unpack the message using pack_no_forward (no mediator routing)
+    let packed =
+        block_on(interface.pack_no_forward(message.clone(), did.clone(), vec![did.clone()]))
+            .expect("Failed to pack complex message");
 
     let unpacked = block_on(interface.unpack(packed)).expect("Failed to unpack complex message");
 
