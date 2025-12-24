@@ -9,7 +9,10 @@ fn test_errors_are_logged_to_file() {
     let temp_dir = TempDir::new().unwrap();
     let db_path = temp_dir.path().join("test.db");
 
-    let interface = DidComInterface::new(db_path.to_str().unwrap().to_string());
+    let interface = DidComInterface::new(
+        db_path.to_str().unwrap().to_string(),
+        "did:peer:test-mediator".to_string(),
+    );
 
     // Create temp file for metrics
     let temp_file = NamedTempFile::new().unwrap();

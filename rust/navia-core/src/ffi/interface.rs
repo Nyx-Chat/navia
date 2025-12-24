@@ -4,11 +4,13 @@
 //! applications use to interact with the navia library.
 
 use crate::core::audit::{audit_log, SecurityEvent, StorageOperation};
-use crate::core::didcomm::handler::DidcommMessaging;
+use crate::core::didcomm::handler::{audit_pack, message_to_didcomm, DidcommMessaging};
 use crate::core::didcomm::message::Message;
 use crate::core::validation::{
     validate_message_body, validate_seed, validate_storage_category, validate_storage_key,
 };
+use crate::error::specific::UnpackingError;
+use crate::error::NaviaError;
 use crate::ffi::types::{DIDCommMessage, DidCommError, KeyValue};
 use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
 use askar_storage::generate_raw_store_key;
@@ -36,7 +38,10 @@ use zeroize::Zeroize;
 /// # use crate::ffi::DidComInterface;
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // Create and initialize the interface
-/// let interface = DidComInterface::new("/path/to/db".to_string());
+/// let interface = DidComInterface::new(
+///     "/path/to/db".to_string(),
+///     "did:peer:mediator123".to_string()  // Mediator DID for routing
+/// );
 /// let seed = vec![0u8; 32]; // Use a secure seed in production
 /// interface.open("/path/to/db".to_string(), seed).await?;
 ///
@@ -47,7 +52,7 @@ use zeroize::Zeroize;
 /// ).await?;
 ///
 /// // Pack a message
-/// let message = DidCommMessage {
+/// let message = DIDCommMessage {
 ///     id: "unique-id".to_string(),
 ///     msg_type: "https://example.org/protocols/basicmessage/2.0/message".to_string(),
 ///     body: r#"{"content": "Hello, World!"}"#.to_string(),
@@ -58,7 +63,7 @@ use zeroize::Zeroize;
 /// let packed = interface.pack(
 ///     message,
 ///     my_did,
-///     "did:peer:recipient".to_string()
+///     vec!["did:peer:recipient".to_string()]
 /// ).await?;
 /// # Ok(())
 /// # }
@@ -67,6 +72,8 @@ use zeroize::Zeroize;
 pub struct DidComInterface {
     /// Thread-safe storage for the DIDComm messaging handler
     didcomm_messaging: RwLock<Option<Arc<DidcommMessaging>>>,
+    /// Mediator DID for message routing
+    mediator_did: String,
     /// Dedicated Tokio runtime for async operations
     pub(crate) runtime: Arc<Runtime>,
 }
@@ -123,6 +130,7 @@ impl DidComInterface {
     /// # Arguments
     ///
     /// * `_path` - Database path (currently unused, kept for API compatibility)
+    /// * `mediator_did` - The DID of the mediator to use for message routing
     ///
     /// # Returns
     ///
@@ -133,10 +141,13 @@ impl DidComInterface {
     ///
     /// ```ignore
     /// # use crate::ffi::DidComInterface;
-    /// let interface = DidComInterface::new("/path/to/db".to_string());
+    /// let interface = DidComInterface::new(
+    ///     "/path/to/db".to_string(),
+    ///     "did:peer:mediator123".to_string()
+    /// );
     /// ```
     #[uniffi::constructor]
-    pub fn new(_path: String) -> Self {
+    pub fn new(_path: String, mediator_did: String) -> Self {
         // Create a dedicated runtime for this instance
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
@@ -148,6 +159,7 @@ impl DidComInterface {
 
         Self {
             didcomm_messaging: RwLock::new(None),
+            mediator_did,
             runtime,
         }
     }
@@ -182,7 +194,10 @@ impl DidComInterface {
     /// ```ignore
     /// # use crate::ffi::DidComInterface;
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let interface = DidComInterface::new("/data/navia.db".to_string());
+    /// let interface = DidComInterface::new(
+    ///     "/data/navia.db".to_string(),
+    ///     "did:peer:mediator123".to_string()
+    /// );
     /// let seed = generate_secure_seed(); // Your secure seed generation
     /// interface.open("/data/navia.db".to_string(), seed).await?;
     /// # Ok(())
@@ -304,12 +319,14 @@ impl DidComInterface {
         // Check if we're already in a Tokio context
         let (message, _metadata) = if Handle::try_current().is_ok() {
             // We're in a context, proceed normally
-            messaging
-                .unpack_message(&msg)
-                .await
-                .map_err(|e| DidCommError::UnpackingError {
-                    message: e.to_string(),
-                })?
+            messaging.unpack_message(&msg).await.map_err(|e| {
+                // Use NaviaError for automatic error logging
+                let navia_err: NaviaError = UnpackingError::MalformedMessage {
+                    details: e.to_string(),
+                }
+                .into();
+                DidCommError::from(navia_err)
+            })?
         } else {
             // We need to provide context - use our runtime
             let runtime = self.runtime.clone();
@@ -321,8 +338,13 @@ impl DidComInterface {
                 .map_err(|e| DidCommError::GeneralError {
                     message: e.to_string(),
                 })?
-                .map_err(|e| DidCommError::UnpackingError {
-                    message: e.to_string(),
+                .map_err(|e| {
+                    // Use NaviaError for automatic error logging
+                    let navia_err: NaviaError = UnpackingError::MalformedMessage {
+                        details: e.to_string(),
+                    }
+                    .into();
+                    DidCommError::from(navia_err)
                 })?
         };
 
@@ -330,11 +352,11 @@ impl DidComInterface {
         Ok(message.into())
     }
 
-    /// Packs (encrypts) a message using DIDComm encryption.
+    /// Packs (encrypts) a message using DIDComm encryption with mediator routing.
     ///
-    /// Creates an encrypted DIDComm message that can only be decrypted by the
-    /// intended recipient. The message is also signed by the sender for
-    /// authentication.
+    /// Creates an encrypted DIDComm message that is wrapped for delivery through
+    /// the configured mediator. The message is encrypted for the recipient and
+    /// then wrapped in a forward message for the mediator.
     ///
     /// # Arguments
     ///
@@ -345,17 +367,17 @@ impl DidComInterface {
     ///   - `from`: Should match the `from` parameter
     ///   - `to`: Should contain the `to` parameter
     /// * `from` - Sender's DID (must have keys in storage)
-    /// * `to` - Recipient's DID (will be resolved to fetch encryption keys)
+    /// * `to` - List of recipient DIDs (will be resolved to fetch encryption keys)
     ///
     /// # Returns
     ///
-    /// An encrypted DIDComm message as a JSON string, ready for transmission.
+    /// An encrypted DIDComm message as a JSON string, ready for transmission to the mediator.
     ///
     /// # Errors
     ///
     /// Returns `DidCommError::PackingError` if:
     /// - Sender keys not found in storage
-    /// - Recipient DID cannot be resolved
+    /// - Recipient or mediator DID cannot be resolved
     /// - Encryption fails
     ///
     /// # Example
@@ -374,11 +396,11 @@ impl DidComInterface {
     /// let encrypted = interface.pack(
     ///     message,
     ///     "did:peer:my-did".to_string(),
-    ///     "did:peer:their-did".to_string()
+    ///     vec!["did:peer:their-did".to_string()]
     /// ).await?;
     ///
-    /// // Send encrypted message over transport
-    /// send_message(encrypted);
+    /// // Send encrypted message to mediator for delivery
+    /// send_to_mediator(encrypted);
     /// # Ok(())
     /// # }
     /// ```
@@ -386,35 +408,49 @@ impl DidComInterface {
         &self,
         msg: DIDCommMessage,
         from: String,
-        to: String,
+        to: Vec<String>,
     ) -> Result<String, DidCommError> {
         // Validate message body size
         validate_message_body(&msg.body).map_err(|e| DidCommError::ValidationError {
             message: e.to_string(),
         })?;
 
-        // Convert FFI DIDCommMessage to core Message
+        // Convert FFI DIDCommMessage to navia_didcomm Message
         let message: Message = msg.into();
+        let didcomm_msg = message_to_didcomm(&message);
 
         // Clone the Arc to avoid holding the lock across await
         let messaging = self.get_messaging()?;
+        let mediator_did = self.mediator_did.clone();
+
+        // Convert Vec<String> to Vec<&str> for the API
+        let to_refs: Vec<&str> = to.iter().map(|s| s.as_str()).collect();
+        let to_for_audit = to.join(",");
 
         // Check if we're already in a Tokio context
         if Handle::try_current().is_ok() {
             // We're in a context, proceed normally
             let (packed_message, _metadata) = messaging
-                .pack_message(&message, &to, &from)
+                .pack_message_with_routing(&didcomm_msg, &to_refs, &from, &mediator_did)
                 .await
                 .map_err(|e| DidCommError::PackingError {
                     message: e.to_string(),
                 })?;
 
+            audit_pack(Some(&from), &to_for_audit, &message.id);
             Ok(packed_message)
         } else {
             // We need to provide context - use our runtime
             let runtime = self.runtime.clone();
-            let handle =
-                runtime.spawn(async move { messaging.pack_message(&message, &to, &from).await });
+            let message_id = message.id.clone();
+            let from_clone = from.clone();
+            let to_clone = to.clone();
+            let handle = runtime.spawn(async move {
+                let to_refs: Vec<&str> = to_clone.iter().map(|s| s.as_str()).collect();
+                messaging
+                    .pack_message_with_routing(&didcomm_msg, &to_refs, &from, &mediator_did)
+                    .await
+            });
 
             let result = handle
                 .await
@@ -425,6 +461,121 @@ impl DidComInterface {
                     message: e.to_string(),
                 })?;
 
+            audit_pack(Some(&from_clone), &to_for_audit, &message_id);
+            Ok(result.0)
+        }
+    }
+
+    /// Packs (encrypts) a message directly without mediator routing.
+    ///
+    /// Creates an encrypted DIDComm message that goes directly to the recipient
+    /// without any forward wrapping. Use this for mediators or direct peer-to-peer
+    /// communication without routing.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The message to encrypt, containing:
+    ///   - `id`: Unique message identifier
+    ///   - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
+    ///   - `body`: Message content as JSON string
+    ///   - `from`: Should match the `from` parameter
+    ///   - `to`: Should contain the `to` parameter
+    /// * `from` - Sender's DID (must have keys in storage)
+    /// * `to` - List of recipient DIDs (will be resolved to fetch encryption keys)
+    ///
+    /// # Returns
+    ///
+    /// An encrypted DIDComm message as a JSON string, ready for direct transmission.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DidCommError::PackingError` if:
+    /// - Sender keys not found in storage
+    /// - Recipient DID cannot be resolved
+    /// - Encryption fails
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// # use crate::ffi::{DidComInterface, DIDCommMessage};
+    /// # async fn example(mediator_interface: &DidComInterface) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Mediator forwarding a message to final recipient
+    /// let inner_message = DIDCommMessage {
+    ///     id: "msg-456".to_string(),
+    ///     msg_type: "https://didcomm.org/basicmessage/2.0/message".to_string(),
+    ///     body: r#"{"content": "Hello from Alice!"}"#.to_string(),
+    ///     from: Some("did:peer:alice".to_string()),
+    ///     to: vec!["did:peer:bob".to_string()],
+    /// };
+    ///
+    /// let encrypted = mediator_interface.pack_no_forward(
+    ///     inner_message,
+    ///     "did:peer:mediator".to_string(),
+    ///     vec!["did:peer:bob".to_string()]
+    /// ).await?;
+    ///
+    /// // Send directly to recipient
+    /// send_to_recipient(encrypted);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn pack_no_forward(
+        &self,
+        msg: DIDCommMessage,
+        from: String,
+        to: Vec<String>,
+    ) -> Result<String, DidCommError> {
+        // Validate message body size
+        validate_message_body(&msg.body).map_err(|e| DidCommError::ValidationError {
+            message: e.to_string(),
+        })?;
+
+        // Convert FFI DIDCommMessage to navia_didcomm Message
+        let message: Message = msg.into();
+        let didcomm_msg = message_to_didcomm(&message);
+
+        // Clone the Arc to avoid holding the lock across await
+        let messaging = self.get_messaging()?;
+
+        // Convert Vec<String> to Vec<&str> for the API
+        let to_refs: Vec<&str> = to.iter().map(|s| s.as_str()).collect();
+        let to_for_audit = to.join(",");
+
+        // Check if we're already in a Tokio context
+        if Handle::try_current().is_ok() {
+            // We're in a context, proceed normally
+            let (packed_message, _metadata) = messaging
+                .pack_message_no_forward(&didcomm_msg, &to_refs, &from)
+                .await
+                .map_err(|e| DidCommError::PackingError {
+                    message: e.to_string(),
+                })?;
+
+            audit_pack(Some(&from), &to_for_audit, &message.id);
+            Ok(packed_message)
+        } else {
+            // We need to provide context - use our runtime
+            let runtime = self.runtime.clone();
+            let message_id = message.id.clone();
+            let from_clone = from.clone();
+            let to_clone = to.clone();
+            let handle = runtime.spawn(async move {
+                let to_refs: Vec<&str> = to_clone.iter().map(|s| s.as_str()).collect();
+                messaging
+                    .pack_message_no_forward(&didcomm_msg, &to_refs, &from)
+                    .await
+            });
+
+            let result = handle
+                .await
+                .map_err(|e| DidCommError::GeneralError {
+                    message: e.to_string(),
+                })?
+                .map_err(|e| DidCommError::PackingError {
+                    message: e.to_string(),
+                })?;
+
+            audit_pack(Some(&from_clone), &to_for_audit, &message_id);
             Ok(result.0)
         }
     }

@@ -17,7 +17,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // 1. Constructor
     println!("1. Creating interface...");
-    let interface = DidComInterface::new(db_path.to_string_lossy().to_string());
+    let interface = DidComInterface::new(
+        db_path.to_string_lossy().to_string(),
+        "did:peer:test-mediator".to_string(),
+    );
 
     // 2. Open database
     println!("2. Opening database...");
@@ -120,7 +123,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         to: vec![bob_did.clone()],
     };
     let packed = interface
-        .pack(message.clone(), alice_did.clone(), bob_did.clone())
+        .pack(message.clone(), alice_did.clone(), vec![bob_did.clone()])
         .await?;
     println!("   Packed length: {} bytes", packed.len());
 

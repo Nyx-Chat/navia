@@ -10,7 +10,8 @@ use serde_json::Value;
 fn test_error_logging_initialization() {
     use tempfile::NamedTempFile;
 
-    let interface = DidComInterface::new("unused".to_string());
+    let interface =
+        DidComInterface::new("unused".to_string(), "did:peer:test-mediator".to_string());
 
     // Create temp file for error logs
     let temp_file = NamedTempFile::new().unwrap();
@@ -33,7 +34,8 @@ fn test_error_logging_initialization() {
 fn test_error_logging_can_be_disabled() {
     use tempfile::NamedTempFile;
 
-    let interface = DidComInterface::new("unused".to_string());
+    let interface =
+        DidComInterface::new("unused".to_string(), "did:peer:test-mediator".to_string());
 
     // Create temp file for error logs
     let temp_file = NamedTempFile::new().unwrap();
@@ -59,7 +61,8 @@ fn test_error_logging_can_be_disabled() {
 fn test_error_logs_export() {
     use tempfile::NamedTempFile;
 
-    let interface = DidComInterface::new("unused".to_string());
+    let interface =
+        DidComInterface::new("unused".to_string(), "did:peer:test-mediator".to_string());
 
     // Create temp file for error logs
     let temp_file = NamedTempFile::new().unwrap();
@@ -76,7 +79,8 @@ fn test_error_logs_export() {
 fn test_error_logs_clear() {
     use tempfile::NamedTempFile;
 
-    let interface = DidComInterface::new("unused".to_string());
+    let interface =
+        DidComInterface::new("unused".to_string(), "did:peer:test-mediator".to_string());
 
     // Create temp file for error logs
     let temp_file = NamedTempFile::new().unwrap();
