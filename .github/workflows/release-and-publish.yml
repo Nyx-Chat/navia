@@ -71,8 +71,10 @@ jobs:
         with:
           workflow: pr-validation.yml
           workflow_conclusion: success
-          pattern: android-lib-*
+          name: android-lib-.*
+          name_is_regexp: true
           path: ./android-artifacts/
+          search_artifacts: true
 
       - name: Setup Android Environment
         if: steps.check_tag.outputs.EXISTS == 'false'
@@ -237,6 +239,7 @@ jobs:
           workflow_conclusion: success
           name: ios-build-artifacts
           path: ./ios-artifacts/
+          search_artifacts: true
 
       - name: Setup iOS artifacts
         if: needs.release-and-publish.outputs.tag_created == 'true'
