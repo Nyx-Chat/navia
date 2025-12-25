@@ -11,13 +11,13 @@ import Testing
 
 @Test("Basic initialization creates DidComInterface instance")
 func testBasicInitialization() throws {
-    let interface = DidComInterface(path: "")
+    let interface = DidComInterface(path: "", mediatorDid: "")
     #expect(interface != nil, "DidComInterface should be created successfully")
 }
 
 @Test("Database opens and health check passes")
 func testOpenDatabase() async throws {
-    let interface = DidComInterface(path: "")
+    let interface = DidComInterface(path: "", mediatorDid: "")
     let seed = Data(repeating: 42, count: 32)
     let tempPath = NSTemporaryDirectory() + "test_db_\(UUID().uuidString).sqlite"
     
@@ -31,7 +31,7 @@ func testOpenDatabase() async throws {
 
 @Test("DID generation creates valid peer DIDs")
 func testDIDGeneration() async throws {
-    let interface = DidComInterface(path: "")
+    let interface = DidComInterface(path: "", mediatorDid: "")
     let seed = Data(repeating: 42, count: 32)
     let tempPath = NSTemporaryDirectory() + "test_db_\(UUID().uuidString).sqlite"
     
@@ -47,7 +47,7 @@ func testDIDGeneration() async throws {
 
 @Test("Storage operations work correctly")
 func testStorageOperations() async throws {
-    let interface = DidComInterface(path: "")
+    let interface = DidComInterface(path: "", mediatorDid: "")
     let seed = Data(repeating: 42, count: 32)
     let tempPath = NSTemporaryDirectory() + "test_db_\(UUID().uuidString).sqlite"
     
@@ -85,7 +85,7 @@ func testStorageOperations() async throws {
 // TODO: Fix pack/unpack FFI timeout issue - hangs when called in test suite context
 // @Test("Message pack and unpack roundtrip works correctly")
 func testMessagePackUnpack() async throws {
-    let interface = DidComInterface(path: "")
+    let interface = DidComInterface(path: "", mediatorDid: "")
     let seed = Data(repeating: 42, count: 32)
     let tempPath = NSTemporaryDirectory() + "test_db_\(UUID().uuidString).sqlite"
     
@@ -102,7 +102,7 @@ func testMessagePackUnpack() async throws {
         to: [bob]
     )
     
-    let encrypted = try await interface.pack(msg: message, from: alice, to: bob)
+    let encrypted = try await interface.pack(msg: message, from: alice, to: [bob])
     #expect(!encrypted.isEmpty, "Encrypted message should not be empty")
     
     let decrypted = try await interface.unpack(msg: encrypted)
