@@ -102,7 +102,7 @@ func testMessagePackUnpack() async throws {
         to: [bob]
     )
     
-    let encrypted = try await interface.pack(msg: message, from: alice, to: bob)
+    let encrypted = try await interface.pack(msg: message, from: alice, to: [bob])
     #expect(!encrypted.isEmpty, "Encrypted message should not be empty")
     
     let decrypted = try await interface.unpack(msg: encrypted)
