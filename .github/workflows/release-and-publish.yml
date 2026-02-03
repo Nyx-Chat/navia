@@ -67,7 +67,7 @@ jobs:
 
       - name: Download Android artifacts from PR validation
         if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v14
         with:
           workflow: pr-validation.yml
           workflow_conclusion: success
@@ -233,7 +233,7 @@ jobs:
 
       - name: Download iOS artifacts from PR validation
         if: needs.release-and-publish.outputs.tag_created == 'true'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v14
         with:
           workflow: pr-validation.yml
           workflow_conclusion: success
