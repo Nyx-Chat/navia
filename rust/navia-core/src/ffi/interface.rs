@@ -286,7 +286,9 @@ impl DidComInterface {
     /// A `DIDCommMessage` containing:
     /// - `id`: Message identifier
     /// - `msg_type`: Protocol message type  
-    /// - `body`: Message body (as JSON string)
+    /// - `body`: Message body text. A JSON-string body comes back verbatim as
+    ///   plain text; an object, array, number, bool or null body comes back as
+    ///   its compact JSON text (see `ffi::conversions` for the body rule)
     /// - `from`: Sender DID (if authenticated)
     /// - `to`: List of recipient DIDs
     ///
@@ -363,7 +365,9 @@ impl DidComInterface {
     /// * `msg` - The message to encrypt, containing:
     ///   - `id`: Unique message identifier
     ///   - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-    ///   - `body`: Message content as JSON string
+    ///   - `body`: Message content. Text whose first non-whitespace char is `{`
+    ///     or `[` and that parses as JSON travels as that object or array; any
+    ///     other text travels as a JSON string
     ///   - `from`: Should match the `from` parameter
     ///   - `to`: Should contain the `to` parameter
     /// * `from` - Sender's DID (must have keys in storage)
@@ -477,7 +481,9 @@ impl DidComInterface {
     /// * `msg` - The message to encrypt, containing:
     ///   - `id`: Unique message identifier
     ///   - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-    ///   - `body`: Message content as JSON string
+    ///   - `body`: Message content. Text whose first non-whitespace char is `{`
+    ///     or `[` and that parses as JSON travels as that object or array; any
+    ///     other text travels as a JSON string
     ///   - `from`: Should match the `from` parameter
     ///   - `to`: Should contain the `to` parameter
     /// * `from` - Sender's DID (must have keys in storage)
