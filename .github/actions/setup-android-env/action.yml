@@ -21,7 +21,8 @@ runs:
         fi
     
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      # v4 skips the legacy 'tools' package (v3's default) that Google removed from the SDK repo on 2026-09-17.
+      uses: android-actions/setup-android@v4
     
     - name: Install Android SDK build-tools
       shell: bash
