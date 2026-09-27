@@ -78,6 +78,28 @@ fn test_unpack_invalid_message() {
     }
 }
 
+/// Tripwire for the limitation documented on `DidComInterface::unpack`:
+/// navia-didcomm 1.3.0 maps serde_json's `Eof` to `InvalidState`, so an empty or
+/// truncated frame is reported as `DatabaseError` although it fails the same way
+/// on every redelivery. If navia-didcomm starts reporting it as `Malformed`, this
+/// test fails; flip it to `UnpackingError` and drop the caveat from the docs and
+/// the CHANGELOG.
+#[test]
+fn test_unpack_truncated_frame_is_still_reported_as_database_error() {
+    let (interface, _temp_dir, _mediator, _mediator_dir) = create_test_interface();
+
+    let truncated_frames = ["", r#"{"ciphertext": "abc""#];
+
+    for frame in truncated_frames {
+        let result = block_on(interface.unpack(frame.to_string()));
+        assert!(
+            matches!(result, Err(DidCommError::DatabaseError { .. })),
+            "navia-didcomm 1.3.0 reports a truncated frame ({frame:?}) as InvalidState, \
+             which surfaces as DatabaseError, got {result:?}"
+        );
+    }
+}
+
 #[test]
 fn test_pack_without_recipient_keys() {
     let (interface, _temp_dir, _mediator, _mediator_dir) = create_test_interface();
@@ -206,8 +228,9 @@ fn test_unpack_message_for_wrong_recipient() {
     // Charlie tries to unpack the original packed message (should fail - it's encrypted for mediator)
     let result = block_on(charlie_interface.unpack(packed_for_mediator.clone()));
     assert!(
-        result.is_err(),
-        "Charlie should not be able to unpack message meant for mediator"
+        matches!(result, Err(DidCommError::UnpackingError { .. })),
+        "A frame for someone else's keys can never be unpacked, so it surfaces as \
+         UnpackingError, got {result:?}"
     );
 
     // Keep temp directories alive

@@ -7,6 +7,7 @@ pub use navia_messaging::messaging::DidcommMessaging;
 
 use crate::core::audit::{audit_log, SecurityEvent};
 use crate::core::didcomm::message::{Message, MessageBody};
+use crate::error::specific::StorageError;
 use crate::error::{NaviaError, PackingError, UnpackingError};
 use navia_didcomm::{Message as DIDCommMessage, UnpackMetadata};
 use serde_json::json;
@@ -111,18 +112,300 @@ pub fn map_packing_error(
     }
 }
 
-/// Maps navia_messaging errors to specific NaviaError variants for unpacking.
+/// Why an inbound frame could not be unpacked, as far as a redelivery is concerned.
+///
+/// The first five come from the frame itself and fail the same way on every
+/// redelivery, so a consumer acknowledges them to the mediator. `Transient` is a
+/// store, I/O or DID-resolution failure a later attempt can get past, or a
+/// failure that cannot be told apart from one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnpackFailure {
+    /// Not a well-formed JWE, JWS or JWM (a wrong signature included).
+    Malformed,
+    /// Addressed to keys this store does not hold.
+    SecretNotFound,
+    /// No algorithm this build supports can open it.
+    NoCompatibleCrypto,
+    /// Uses a crypto algorithm or method this build does not support.
+    Unsupported,
+    /// Carries an argument navia-didcomm rejects.
+    IllegalArgument,
+    /// A later attempt can get past it, or it cannot be told apart from such a
+    /// failure (some faults of the frame itself included, see
+    /// `classify_didcomm_kind`).
+    Transient,
+}
+
+/// Classifies a failed `DidcommMessaging::unpack_message`.
+///
+/// The outer navia-messaging kind is read first. On the pinned v1.1.1 it is
+/// always `InvalidState` for an unpack, because `DidcommMessaging::unpack` wraps
+/// whatever navia-didcomm's `Message::unpack` returned in that kind, so the kind
+/// that decides is navia-didcomm's, inside it. navia-core depends on the same
+/// navia-didcomm as navia-messaging (one entry in `Cargo.lock`), so that error is
+/// read by type through `anyhow::Error::downcast_ref` rather than from its
+/// `Debug` rendering, which nyx-org-gateway has to parse because it has no direct
+/// navia-didcomm dependency. An `InvalidState` around anything else is
+/// transient, so nothing is acknowledged by accident.
+///
+/// Both unpack branches of `DidComInterface::unpack` go through this one
+/// function (via `map_unpacking_error`).
+#[must_use]
+pub fn classify_unpack_failure(err: &navia_messaging::error::Error) -> UnpackFailure {
+    use navia_messaging::error::ErrorKind;
+
+    // Exhaustive on purpose: a kind navia-messaging adds has to be placed here.
+    match err.kind() {
+        ErrorKind::Malformed => UnpackFailure::Malformed,
+        ErrorKind::SecretNotFound => UnpackFailure::SecretNotFound,
+        ErrorKind::NoCompatibleCrypto => UnpackFailure::NoCompatibleCrypto,
+        ErrorKind::Unsupported => UnpackFailure::Unsupported,
+        ErrorKind::IllegalArgument => UnpackFailure::IllegalArgument,
+        ErrorKind::InvalidState => err
+            .source
+            .downcast_ref::<navia_didcomm::error::Error>()
+            .map_or(UnpackFailure::Transient, |inner| {
+                classify_didcomm_kind(inner.kind())
+            }),
+        ErrorKind::IoError | ErrorKind::DIDNotResolved | ErrorKind::DIDUrlNotFound => {
+            UnpackFailure::Transient
+        }
+    }
+}
+
+/// Classifies the navia-didcomm kind that navia-messaging wrapped in `InvalidState`.
+///
+/// The same split as nyx-org-gateway's `PERMANENT_UNPACK_KINDS`. `IoError`,
+/// `InvalidState`, the DID resolution kinds, and the kinds the pinned
+/// navia-didcomm declares but its unpack path never returns all stay transient.
+///
+/// An inner `InvalidState` is a store failure behind the secrets resolver or a
+/// failed DID resolution, but navia-didcomm 1.3.0 also gives it to some faults
+/// of the frame itself: truncated JSON in the envelope or protected header (an
+/// empty frame included), because serde_json's `Eof` maps to `InvalidState`; a
+/// wrong skid; an anoncrypt/authcrypt recipient mismatch; a JWS signature kid
+/// that does not match. It gives a sender kid missing from its DID document
+/// `DIDUrlNotFound`. The kind alone cannot tell those apart from a store or
+/// resolution failure, so they stay transient here too and fail the same way on
+/// every redelivery; a consumer has to cap redeliveries per `delivery_id`.
+fn classify_didcomm_kind(kind: navia_didcomm::error::ErrorKind) -> UnpackFailure {
+    use navia_didcomm::error::ErrorKind;
+
+    match kind {
+        ErrorKind::Malformed => UnpackFailure::Malformed,
+        ErrorKind::SecretNotFound => UnpackFailure::SecretNotFound,
+        ErrorKind::NoCompatibleCrypto => UnpackFailure::NoCompatibleCrypto,
+        ErrorKind::Unsupported => UnpackFailure::Unsupported,
+        ErrorKind::IllegalArgument => UnpackFailure::IllegalArgument,
+        _ => UnpackFailure::Transient,
+    }
+}
+
+/// Maps a failed `DidcommMessaging::unpack_message` to the `NaviaError` its
+/// classification (`classify_unpack_failure`) calls for.
+///
+/// A permanent failure becomes an `UnpackingError`, which reaches the FFI as
+/// `DidCommError::UnpackingError` (Kotlin `DidCommException.UnpackingException`,
+/// Swift `DidCommError.UnpackingError`): the frame can never be unpacked, so a
+/// consumer acknowledges it to the mediator. A transient failure becomes
+/// `StorageError::OperationFailed`, which reaches the FFI as
+/// `DidCommError::DatabaseError` (Kotlin `DidCommException.DatabaseException`),
+/// the variant navia-core already uses for navia-messaging failures; a consumer
+/// leaves that frame for redelivery, with a cap per `delivery_id`, because some
+/// faults of the frame itself land here too (see `classify_didcomm_kind`). Both
+/// conversions go through the `From` impls, so the failure is still counted in
+/// the metrics.
 pub fn map_unpacking_error(err: navia_messaging::error::Error) -> NaviaError {
-    let error_str = err.to_string();
-    if error_str.contains("Wrong recipient") || error_str.contains("Recipient key not found") {
-        NaviaError::from(UnpackingError::RecipientKeyNotFound { details: error_str })
-    } else if error_str.contains("Invalid signature") {
-        NaviaError::from(UnpackingError::InvalidSignature {
-            signer: "unknown".to_string(),
-        })
-    } else if error_str.contains("Malformed") || error_str.contains("Invalid format") {
-        NaviaError::from(UnpackingError::MalformedMessage { details: error_str })
-    } else {
-        NaviaError::from(UnpackingError::DecryptionFailed { details: error_str })
+    let details = err.to_string();
+    match classify_unpack_failure(&err) {
+        UnpackFailure::Malformed => UnpackingError::MalformedMessage { details }.into(),
+        UnpackFailure::SecretNotFound => UnpackingError::RecipientKeyNotFound { details }.into(),
+        UnpackFailure::NoCompatibleCrypto | UnpackFailure::Unsupported => {
+            UnpackingError::DecryptionFailed { details }.into()
+        }
+        UnpackFailure::IllegalArgument => UnpackingError::InvalidMessageFormat { details }.into(),
+        UnpackFailure::Transient => StorageError::OperationFailed {
+            operation: "unpack".to_string(),
+            details,
+        }
+        .into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_unpack_failure, map_unpacking_error, UnpackFailure};
+    use crate::error::ffi::DidCommError;
+    use crate::error::specific::{StorageError, UnpackingError};
+    use crate::error::NaviaError;
+    use navia_didcomm::error::{Error as DidcommError, ErrorKind as DidcommKind};
+    use navia_messaging::error::{Error as MessagingError, ErrorKind as MessagingKind};
+
+    /// The exact shape `DidcommMessaging::unpack` returns: navia-didcomm's error
+    /// wrapped in navia-messaging's `InvalidState`.
+    fn wrapped(kind: DidcommKind) -> MessagingError {
+        MessagingError::new(MessagingKind::InvalidState, DidcommError::msg(kind, "test"))
+    }
+
+    fn is_unpacking(err: MessagingError) -> bool {
+        matches!(
+            DidCommError::from(map_unpacking_error(err)),
+            DidCommError::UnpackingError { .. }
+        )
+    }
+
+    fn is_database(err: MessagingError) -> bool {
+        matches!(
+            DidCommError::from(map_unpacking_error(err)),
+            DidCommError::DatabaseError { .. }
+        )
+    }
+
+    #[test]
+    fn the_didcomm_kind_inside_invalid_state_decides() {
+        let permanent = [
+            (DidcommKind::Malformed, UnpackFailure::Malformed),
+            (DidcommKind::SecretNotFound, UnpackFailure::SecretNotFound),
+            (
+                DidcommKind::NoCompatibleCrypto,
+                UnpackFailure::NoCompatibleCrypto,
+            ),
+            (DidcommKind::Unsupported, UnpackFailure::Unsupported),
+            (DidcommKind::IllegalArgument, UnpackFailure::IllegalArgument),
+        ];
+        for (kind, expected) in permanent {
+            assert_eq!(
+                classify_unpack_failure(&wrapped(kind)),
+                expected,
+                "{kind:?}"
+            );
+            assert!(
+                is_unpacking(wrapped(kind)),
+                "{kind:?} should surface as UnpackingError"
+            );
+        }
+
+        let transient = [
+            DidcommKind::InvalidState,
+            DidcommKind::IoError,
+            DidcommKind::DIDNotResolved,
+            DidcommKind::DIDUrlNotFound,
+            DidcommKind::Timeout,
+            DidcommKind::ResourceExhausted,
+        ];
+        for kind in transient {
+            assert_eq!(
+                classify_unpack_failure(&wrapped(kind)),
+                UnpackFailure::Transient,
+                "{kind:?}"
+            );
+            assert!(
+                is_database(wrapped(kind)),
+                "{kind:?} should surface as DatabaseError"
+            );
+        }
+    }
+
+    #[test]
+    fn navia_messagings_own_kind_decides_outside_invalid_state() {
+        let permanent = [
+            (MessagingKind::Malformed, UnpackFailure::Malformed),
+            (MessagingKind::SecretNotFound, UnpackFailure::SecretNotFound),
+            (
+                MessagingKind::NoCompatibleCrypto,
+                UnpackFailure::NoCompatibleCrypto,
+            ),
+            (MessagingKind::Unsupported, UnpackFailure::Unsupported),
+            (
+                MessagingKind::IllegalArgument,
+                UnpackFailure::IllegalArgument,
+            ),
+        ];
+        for (kind, expected) in permanent {
+            let err = || MessagingError::msg(kind, "test");
+            assert_eq!(classify_unpack_failure(&err()), expected, "{kind:?}");
+            assert!(
+                is_unpacking(err()),
+                "{kind:?} should surface as UnpackingError"
+            );
+        }
+
+        let transient = [
+            MessagingKind::IoError,
+            MessagingKind::DIDNotResolved,
+            MessagingKind::DIDUrlNotFound,
+            MessagingKind::InvalidState,
+        ];
+        for kind in transient {
+            let err = || MessagingError::msg(kind, "test");
+            assert_eq!(
+                classify_unpack_failure(&err()),
+                UnpackFailure::Transient,
+                "{kind:?}"
+            );
+            assert!(
+                is_database(err()),
+                "{kind:?} should surface as DatabaseError"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unrecognised_wrapped_error_is_left_for_redelivery() {
+        let io = || {
+            MessagingError::new(
+                MessagingKind::InvalidState,
+                std::io::Error::other("Malformed"),
+            )
+        };
+        // Reads like a navia-didcomm Debug rendering, but is only text: no string sniffing.
+        let rendered =
+            || MessagingError::msg(MessagingKind::InvalidState, "Error { kind: Malformed");
+
+        assert_eq!(classify_unpack_failure(&io()), UnpackFailure::Transient);
+        assert_eq!(
+            classify_unpack_failure(&rendered()),
+            UnpackFailure::Transient
+        );
+        assert!(is_database(io()));
+        assert!(is_database(rendered()));
+    }
+
+    #[test]
+    fn each_permanent_kind_keeps_the_closest_unpacking_variant() {
+        assert!(matches!(
+            map_unpacking_error(wrapped(DidcommKind::Malformed)),
+            NaviaError::Unpacking(UnpackingError::MalformedMessage { .. })
+        ));
+        assert!(matches!(
+            map_unpacking_error(wrapped(DidcommKind::SecretNotFound)),
+            NaviaError::Unpacking(UnpackingError::RecipientKeyNotFound { .. })
+        ));
+        assert!(matches!(
+            map_unpacking_error(wrapped(DidcommKind::NoCompatibleCrypto)),
+            NaviaError::Unpacking(UnpackingError::DecryptionFailed { .. })
+        ));
+        assert!(matches!(
+            map_unpacking_error(wrapped(DidcommKind::Unsupported)),
+            NaviaError::Unpacking(UnpackingError::DecryptionFailed { .. })
+        ));
+        assert!(matches!(
+            map_unpacking_error(wrapped(DidcommKind::IllegalArgument)),
+            NaviaError::Unpacking(UnpackingError::InvalidMessageFormat { .. })
+        ));
+        assert!(matches!(
+            map_unpacking_error(wrapped(DidcommKind::IoError)),
+            NaviaError::Storage(StorageError::OperationFailed { operation, .. }) if operation == "unpack"
+        ));
+
+        match DidCommError::from(map_unpacking_error(wrapped(DidcommKind::SecretNotFound))) {
+            DidCommError::UnpackingError { message } => {
+                assert!(
+                    message.contains("test"),
+                    "the underlying detail is kept: {message}"
+                );
+            }
+            other => panic!("expected UnpackingError, got {other:?}"),
+        }
     }
 }
