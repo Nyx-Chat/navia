@@ -4,13 +4,13 @@
 //! applications use to interact with the navia library.
 
 use crate::core::audit::{audit_log, SecurityEvent, StorageOperation};
-use crate::core::didcomm::handler::{audit_pack, message_to_didcomm, DidcommMessaging};
+use crate::core::didcomm::handler::{
+    audit_pack, map_unpacking_error, message_to_didcomm, DidcommMessaging,
+};
 use crate::core::didcomm::message::Message;
 use crate::core::validation::{
     validate_message_body, validate_seed, validate_storage_category, validate_storage_key,
 };
-use crate::error::specific::UnpackingError;
-use crate::error::NaviaError;
 use crate::ffi::types::{DIDCommMessage, DidCommError, KeyValue};
 use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
 use askar_storage::generate_raw_store_key;
@@ -95,6 +95,15 @@ impl DidComInterface {
         DidCommError::DatabaseError {
             message: err.to_string(),
         }
+    }
+
+    /// Maps a failed unpack to the FFI error its classification calls for.
+    ///
+    /// `UnpackingError` for a frame that can never be unpacked, `DatabaseError`
+    /// for a failure a later attempt can get past (see `map_unpacking_error`).
+    /// Both unpack branches use it, so they classify the same way.
+    fn map_unpack_error(err: navia_messaging::error::Error) -> DidCommError {
+        DidCommError::from(map_unpacking_error(err))
     }
 
     /// Fetches multiple values from storage and converts them to KeyValue objects
@@ -294,11 +303,23 @@ impl DidComInterface {
     ///
     /// # Errors
     ///
-    /// Returns `DidCommError::UnpackingError` if:
-    /// - Message is malformed or corrupted
-    /// - Decryption fails (wrong recipient)
-    /// - Signature verification fails
-    /// - Required keys are not found in storage
+    /// - `DidCommError::UnpackingError` when the frame itself can never be
+    ///   unpacked, so a redelivery fails the same way: it is not a well-formed
+    ///   JWE/JWS/JWM, has a wrong signature or an illegal argument, is addressed
+    ///   to keys this store does not hold, or uses unsupported or incompatible
+    ///   crypto. A consumer can acknowledge such a frame to the mediator.
+    /// - `DidCommError::DatabaseError` when the store, I/O or DID resolution
+    ///   failed; a later attempt can succeed, so leave the frame for redelivery.
+    ///   navia-didcomm 1.3.0 also reports some faults of the frame itself this
+    ///   way, because it gives them `InvalidState`: truncated JSON in the
+    ///   envelope or protected header (an empty frame included), since
+    ///   serde_json's `Eof` maps to `InvalidState`; a wrong skid; an
+    ///   anoncrypt/authcrypt recipient mismatch; a JWS signature kid that does
+    ///   not match. It gives a sender kid missing from its DID document
+    ///   `DIDUrlNotFound`. Those fail the same way on every redelivery, so a
+    ///   consumer should cap redeliveries per `delivery_id`.
+    /// - `DidCommError::GeneralError` when the interface is not open or the
+    ///   runtime task fails.
     ///
     /// # Example
     ///
@@ -321,14 +342,10 @@ impl DidComInterface {
         // Check if we're already in a Tokio context
         let (message, _metadata) = if Handle::try_current().is_ok() {
             // We're in a context, proceed normally
-            messaging.unpack_message(&msg).await.map_err(|e| {
-                // Use NaviaError for automatic error logging
-                let navia_err: NaviaError = UnpackingError::MalformedMessage {
-                    details: e.to_string(),
-                }
-                .into();
-                DidCommError::from(navia_err)
-            })?
+            messaging
+                .unpack_message(&msg)
+                .await
+                .map_err(Self::map_unpack_error)?
         } else {
             // We need to provide context - use our runtime
             let runtime = self.runtime.clone();
@@ -340,14 +357,7 @@ impl DidComInterface {
                 .map_err(|e| DidCommError::GeneralError {
                     message: e.to_string(),
                 })?
-                .map_err(|e| {
-                    // Use NaviaError for automatic error logging
-                    let navia_err: NaviaError = UnpackingError::MalformedMessage {
-                        details: e.to_string(),
-                    }
-                    .into();
-                    DidCommError::from(navia_err)
-                })?
+                .map_err(Self::map_unpack_error)?
         };
 
         // Convert core Message to FFI DIDCommMessage

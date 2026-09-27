@@ -163,7 +163,7 @@ suspend fun unpack(msg: String): DIDCommMessage
 
 - **msg**: Encrypted JWE message
 - **Returns**: Decrypted message
-- **Throws**: `DidCommError.UnpackingError` if decryption fails
+- **Throws**: `DidCommError.UnpackingError` if the frame can never be unpacked (malformed, not for this store's keys, unsupported crypto); `DidCommError.DatabaseError` if the store or DID resolution failed (retry later). navia-didcomm 1.3.0 still reports some faults of the frame itself as `DatabaseError`: truncated JSON in the envelope or protected header (an empty frame included), a wrong skid, an anoncrypt/authcrypt recipient mismatch, a JWS signature kid that does not match, or a sender kid missing from its DID document. Those fail the same way on every retry, so cap redeliveries per `delivery_id` rather than retrying a `DatabaseError` forever.
 
 **Example:**
 ```kotlin
