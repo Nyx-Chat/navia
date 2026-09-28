@@ -1,5 +1,5 @@
 # Security audit configuration for navia
-# Last updated: 2025-07-22
+# Last updated: 2026-09-28
 
 [advisories]
 # List of security advisories to ignore
@@ -18,4 +18,14 @@ ignore = [
     "RUSTSEC-2024-0436", # paste unmaintained
     "RUSTSEC-2024-0370", # proc-macro-error unmaintained
     "RUSTSEC-2021-0127", # serde_cbor unmaintained
+
+    # Transitive, no fixed release on the pinned line (2026-09-28). rustls 0.21 and
+    # hyper 0.14 arrive through ssi 0.12 (did-ion / did-tz / did-web) under
+    # affinidi-did-resolver-cache-sdk 0.6.5 and reqwest 0.11; the fixes exist only in
+    # rustls-webpki 0.103 and h2 0.4, which the rest of the tree already uses. Drop
+    # these entries when the resolver moves off ssi 0.12.
+    "RUSTSEC-2026-0104", # rustls-webpki 0.101: CRL parsing panic
+    "RUSTSEC-2026-0099", # rustls-webpki 0.101: wildcard name constraints
+    "RUSTSEC-2026-0098", # rustls-webpki 0.101: URI name constraints
+    "RUSTSEC-2026-0258", # h2 0.3: unbounded empty DATA frames
 ]
