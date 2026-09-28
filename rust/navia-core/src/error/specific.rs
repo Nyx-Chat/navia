@@ -66,6 +66,14 @@ pub enum UnpackingError {
     /// Decryption algorithm error
     #[error("Decryption failed with algorithm {algorithm}: {details}")]
     AlgorithmDecryptionFailed { algorithm: String, details: String },
+
+    /// The plaintext `from` names another DID than the authcrypt sender key
+    /// (a forged `from`). The message names neither DID, so it stays safe to
+    /// log.
+    #[error(
+        "Sender mismatch: the plaintext `from` is not the DID of the authcrypt sender key that encrypted the frame"
+    )]
+    SenderMismatch,
 }
 
 /// Errors that can occur during DID operations

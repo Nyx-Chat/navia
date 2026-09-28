@@ -121,6 +121,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         body: r#"{"content": "Testing all APIs", "timestamp": "2024-01-01T12:00:00Z"}"#.to_string(),
         from: Some(alice_did.clone()),
         to: vec![bob_did.clone()],
+        authenticated: false,
+        encrypted_from_kid: None,
+        sign_from: None,
+        anonymous_sender: false,
     };
     let packed = interface
         .pack(message.clone(), alice_did.clone(), vec![bob_did.clone()])

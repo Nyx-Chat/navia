@@ -23,6 +23,11 @@ pub struct DIDCommMessage {
     pub body: String,        // Message body (typically JSON)
     pub from: Option<String>, // Sender DID (optional for anonymous)
     pub to: Vec<String>,     // List of recipient DIDs
+    // Sender authentication, set by `unpack` only (UniFFI defaults shown)
+    pub authenticated: bool,                // default false
+    pub encrypted_from_kid: Option<String>, // default None
+    pub sign_from: Option<String>,          // default None
+    pub anonymous_sender: bool,             // default false
 }
 ```
 
@@ -34,8 +39,54 @@ val message = DIDCommMessage(
     body = """{"content": "Hello", "sent_time": "${Instant.now()}"}""",
     from = senderDid,
     to = listOf(recipientDid)
+    // authenticated, encryptedFromKid, signFrom, anonymousSender keep their defaults
 )
 ```
+
+#### Sender authentication fields
+
+The last four fields describe how the frame `unpack` decrypted was
+authenticated. They carry meaning only on a message returned by `unpack`.
+Every other path that creates a `DIDCommMessage` (a message you build for
+`pack` / `packNoForward`, or any other conversion) sets
+`authenticated = false`, both kids to `null` / `nil` and
+`anonymousSender = false`, and `pack` / `packNoForward` ignore whatever you
+put in them. The fields have UniFFI defaults, so Kotlin and Swift code that
+builds a message without them keeps compiling.
+
+| Field (Kotlin / Swift) | Type | Meaning on an unpacked message |
+|---|---|---|
+| `authenticated` | `Boolean` / `Bool` | `true` when the plaintext `from` is proven and the frame is tied to you: `from` is set, navia-didcomm authenticated the frame (authcrypt with a resolved sender key, or a verified signature), every sender key it used belongs to the `from` DID, and either the frame is authcrypt-encrypted or, when a signature is the only proof, every recipient key of its encrypted envelope belongs to a DID named in `to`. **Act on `from` only when this is `true`.** |
+| `encryptedFromKid` | `String?` | Key ID (`did#fragment`) of the authcrypt sender key; `null` for anoncrypt, signed-only or plaintext frames, so it can be `null` on an authenticated message. |
+| `signFrom` | `String?` | Key ID of the verified signature; `null` when the frame was not signed. On a frame that is not authcrypt-encrypted, this is the key that proves `from`. `pack` signs with the sender DID, so a Navia frame carries both kids. |
+| `anonymousSender` | `Boolean` / `Bool` | `true` when the frame arrived in an anoncrypt envelope (anoncrypt alone, or anoncrypt wrapping authcrypt). It says nothing about authentication; read `authenticated` for that. |
+
+`authenticated` is `false` for:
+
+- an unsigned anoncrypt frame or a plaintext frame (no sender key);
+- a frame without `from`, such as navia-messaging's own forward wrapper,
+  which a mediator still sees with the sender's `encryptedFromKid`;
+- a frame whose signature verifies but whose signer kid names another DID
+  than `from`, and that is not authcrypt-encrypted;
+- a signed frame that is not authcrypt-encrypted and was either never
+  encrypted or encrypted to a recipient key whose DID its `to` does not name.
+  A signature stays valid after anyone re-encrypts the signed message, so a
+  message Alice signed for Mallory that Mallory re-encrypts to you comes back
+  with `from` = Alice, `to` = Mallory, `encryptedFromKid = null` and
+  `authenticated = false`. navia-didcomm lists every recipient key of the
+  envelope, not only yours, so every one of them has to belong to a DID in
+  `to`: a relay that adds its own key next to yours does not pass.
+
+`unpack` refuses an authcrypt frame whose `from` names another DID than
+`encryptedFromKid` outright (see [unpack](#unpack)). Authcrypt needs no `to`
+check: only the holder of the sender's key can encrypt from that key to
+yours.
+
+The key that proves `from` on an authenticated message is `encryptedFromKid`
+when it is set and `signFrom` otherwise. Genuine Navia traffic is authcrypt,
+so a consumer that wants only authcrypt proof checks
+`authenticated && encryptedFromKid != null`. `authenticated` says nothing
+about freshness: a genuine frame can arrive twice, so deduplicate by `id`.
 
 ### KeyValue
 
@@ -162,13 +213,16 @@ suspend fun unpack(msg: String): DIDCommMessage
 ```
 
 - **msg**: Encrypted JWE message
-- **Returns**: Decrypted message
-- **Throws**: `DidCommError.UnpackingError` if decryption fails
+- **Returns**: Decrypted message, with the [sender authentication fields](#sender-authentication-fields) filled in from navia-didcomm's unpack metadata
+- **Throws**: `DidCommError.UnpackingError` if decryption fails, or if an authcrypt frame's plaintext `from` names another DID than the DID part of `encryptedFromKid` (a forged `from`; message `Sender mismatch: ...`, which names neither DID). The sender check is permanent: a redelivery fails the same way, so acknowledge the frame and drop it. It runs only when `encryptedFromKid` is set. An anoncrypt frame carries no authcrypt sender key: unsigned, it comes back with `authenticated = false`; signed, `authenticated` follows the signature and `to` (see [Sender authentication fields](#sender-authentication-fields)).
 
 **Example:**
 ```kotlin
 val message = interface.unpack(encryptedMessage)
 println("Received: ${message.body}")
+
+// Act on `from` only when it is proven
+val sender = message.from?.takeIf { message.authenticated }
 ```
 
 #### Storage Operations
@@ -316,9 +370,10 @@ class MessageExchange {
         // 1. Unpack (decrypt)
         val message = interface.unpack(encrypted)
         
-        // 2. Validate sender
-        requireNotNull(message.from) { "Anonymous messages not allowed" }
-        require(isKnownContact(message.from)) { "Unknown sender" }
+        // 2. Validate sender: `from` is proven only when `authenticated`
+        val sender = requireNotNull(message.from) { "Anonymous messages not allowed" }
+        require(message.authenticated) { "Sender not authenticated" }
+        require(isKnownContact(sender)) { "Unknown sender" }
         
         // 3. Process by type
         when (message.msgType) {

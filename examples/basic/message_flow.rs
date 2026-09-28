@@ -50,6 +50,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         body: r#"{"content": "Hello Bob! This is a secure message."}"#.to_string(),
         from: Some(alice_did.clone()),
         to: vec![bob_did.clone()],
+        authenticated: false,
+        encrypted_from_kid: None,
+        sign_from: None,
+        anonymous_sender: false,
     };
 
     // Pack (encrypt) the message
@@ -67,6 +71,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("  ID: {}", unpacked.id);
     println!("  Type: {}", unpacked.msg_type);
     println!("  From: {:?}", unpacked.from);
+    // `from` is proven only when `authenticated` is true
+    println!("  Authenticated: {}", unpacked.authenticated);
+    println!("  Sender key: {:?}", unpacked.encrypted_from_kid);
     println!("  To: {:?}", unpacked.to);
     println!("  Body: {}", unpacked.body);
 

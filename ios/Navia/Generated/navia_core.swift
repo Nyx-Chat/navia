@@ -501,7 +501,10 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
  * # use crate::ffi::DidComInterface;
  * # async fn example() -> Result<(), Box<dyn std::error::Error>> {
  * // Create and initialize the interface
- * let interface = DidComInterface::new("/path/to/db".to_string());
+ * let interface = DidComInterface::new(
+ * "/path/to/db".to_string(),
+ * "did:peer:mediator123".to_string()  // Mediator DID for routing
+ * );
  * let seed = vec![0u8; 32]; // Use a secure seed in production
  * interface.open("/path/to/db".to_string(), seed).await?;
  *
@@ -512,18 +515,23 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
  * ).await?;
  *
  * // Pack a message
- * let message = DidCommMessage {
+ * let message = DIDCommMessage {
  * id: "unique-id".to_string(),
  * msg_type: "https://example.org/protocols/basicmessage/2.0/message".to_string(),
  * body: r#"{"content": "Hello, World!"}"#.to_string(),
  * from: Some(my_did.clone()),
  * to: vec!["did:peer:recipient".to_string()],
+ * // Set by `unpack` only; `pack` ignores them
+ * authenticated: false,
+ * encrypted_from_kid: None,
+ * sign_from: None,
+ * anonymous_sender: false,
  * };
  *
  * let packed = interface.pack(
  * message,
  * my_did,
- * "did:peer:recipient".to_string()
+ * vec!["did:peer:recipient".to_string()]
  * ).await?;
  * # Ok(())
  * # }
@@ -868,7 +876,10 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * ```ignore
      * # use crate::ffi::DidComInterface;
      * # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-     * let interface = DidComInterface::new("/data/navia.db".to_string());
+     * let interface = DidComInterface::new(
+     * "/data/navia.db".to_string(),
+     * "did:peer:mediator123".to_string()
+     * );
      * let seed = generate_secure_seed(); // Your secure seed generation
      * interface.open("/data/navia.db".to_string(), seed).await?;
      * # Ok(())
@@ -878,11 +889,11 @@ public protocol DidComInterfaceProtocol : AnyObject {
     func `open`(path: String, seed: Data) async throws 
     
     /**
-     * Packs (encrypts) a message using DIDComm encryption.
+     * Packs (encrypts) a message using DIDComm encryption with mediator routing.
      *
-     * Creates an encrypted DIDComm message that can only be decrypted by the
-     * intended recipient. The message is also signed by the sender for
-     * authentication.
+     * Creates an encrypted DIDComm message that is wrapped for delivery through
+     * the configured mediator. The message is encrypted for the recipient and
+     * then wrapped in a forward message for the mediator.
      *
      * # Arguments
      *
@@ -893,17 +904,17 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * - `from`: Should match the `from` parameter
      * - `to`: Should contain the `to` parameter
      * * `from` - Sender's DID (must have keys in storage)
-     * * `to` - Recipient's DID (will be resolved to fetch encryption keys)
+     * * `to` - List of recipient DIDs (will be resolved to fetch encryption keys)
      *
      * # Returns
      *
-     * An encrypted DIDComm message as a JSON string, ready for transmission.
+     * An encrypted DIDComm message as a JSON string, ready for transmission to the mediator.
      *
      * # Errors
      *
      * Returns `DidCommError::PackingError` if:
      * - Sender keys not found in storage
-     * - Recipient DID cannot be resolved
+     * - Recipient or mediator DID cannot be resolved
      * - Encryption fails
      *
      * # Example
@@ -917,21 +928,86 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * body: r#"{"content": "Hello!"}"#.to_string(),
      * from: Some("did:peer:my-did".to_string()),
      * to: vec!["did:peer:their-did".to_string()],
+     * authenticated: false,
+     * encrypted_from_kid: None,
+     * sign_from: None,
+     * anonymous_sender: false,
      * };
      *
      * let encrypted = interface.pack(
      * message,
      * "did:peer:my-did".to_string(),
-     * "did:peer:their-did".to_string()
+     * vec!["did:peer:their-did".to_string()]
      * ).await?;
      *
-     * // Send encrypted message over transport
-     * send_message(encrypted);
+     * // Send encrypted message to mediator for delivery
+     * send_to_mediator(encrypted);
      * # Ok(())
      * # }
      * ```
      */
-    func pack(msg: DidCommMessage, from: String, to: String) async throws  -> String
+    func pack(msg: DidCommMessage, from: String, to: [String]) async throws  -> String
+    
+    /**
+     * Packs (encrypts) a message directly without mediator routing.
+     *
+     * Creates an encrypted DIDComm message that goes directly to the recipient
+     * without any forward wrapping. Use this for mediators or direct peer-to-peer
+     * communication without routing.
+     *
+     * # Arguments
+     *
+     * * `msg` - The message to encrypt, containing:
+     * - `id`: Unique message identifier
+     * - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
+     * - `body`: Message content as JSON string
+     * - `from`: Should match the `from` parameter
+     * - `to`: Should contain the `to` parameter
+     * * `from` - Sender's DID (must have keys in storage)
+     * * `to` - List of recipient DIDs (will be resolved to fetch encryption keys)
+     *
+     * # Returns
+     *
+     * An encrypted DIDComm message as a JSON string, ready for direct transmission.
+     *
+     * # Errors
+     *
+     * Returns `DidCommError::PackingError` if:
+     * - Sender keys not found in storage
+     * - Recipient DID cannot be resolved
+     * - Encryption fails
+     *
+     * # Example
+     *
+     * ```ignore
+     * # use crate::ffi::{DidComInterface, DIDCommMessage};
+     * # async fn example(mediator_interface: &DidComInterface) -> Result<(), Box<dyn std::error::Error>> {
+     * // Mediator forwarding a message to final recipient
+     * let inner_message = DIDCommMessage {
+     * id: "msg-456".to_string(),
+     * msg_type: "https://didcomm.org/basicmessage/2.0/message".to_string(),
+     * body: r#"{"content": "Hello from Alice!"}"#.to_string(),
+     * from: Some("did:peer:alice".to_string()),
+     * to: vec!["did:peer:bob".to_string()],
+     * authenticated: false,
+     * encrypted_from_kid: None,
+     * sign_from: None,
+     * anonymous_sender: false,
+     * };
+     *
+     * let encrypted = mediator_interface.pack_no_forward(
+     * inner_message,
+     * "did:peer:mediator".to_string(),
+     * vec!["did:peer:bob".to_string()]
+     * ).await?;
+     *
+     * // Send directly to recipient
+     * send_to_recipient(encrypted);
+     * # Ok(())
+     * # }
+     * ```
+     */
+    func packNoForward(msg: DidCommMessage, from: String, to: [String]) async throws  -> String
     
     /**
      * Removes a value from the encrypted database.
@@ -990,6 +1066,25 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * - `body`: Message body (as JSON string)
      * - `from`: Sender DID (if authenticated)
      * - `to`: List of recipient DIDs
+     * - `authenticated`, `encrypted_from_kid`, `sign_from`, `anonymous_sender`:
+     * how navia-didcomm authenticated the sender (see `DIDCommMessage`).
+     * `authenticated` is `true` only when the plaintext `from` is proven by
+     * the sender key(s) that authenticated the frame and the frame is tied
+     * to this recipient: by authcrypt, or, when a signature is the only
+     * proof, by an encrypted envelope whose every recipient key belongs to
+     * a DID in `to`. A signed message relayed to a recipient its `to` does
+     * not name comes back `false`.
+     *
+     * # Sender check
+     *
+     * An authcrypt frame whose plaintext `from` names another DID than the DID
+     * part of `encrypted_from_kid` (a forged `from`) is refused with
+     * `DidCommError::UnpackingError` ("Sender mismatch: ..."), the permanent
+     * class: a redelivery fails the same way, so a consumer can acknowledge
+     * the frame and drop it. The check runs only when `encrypted_from_kid` is
+     * set. An anoncrypt frame carries no authcrypt sender key: unsigned, it
+     * comes back with `authenticated = false`; signed, `authenticated`
+     * follows the signature and `to` as described above.
      *
      * # Errors
      *
@@ -1008,7 +1103,9 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * let message = interface.unpack(encrypted_msg).await?;
      *
      * println!("Received message type: {}", message.msg_type);
-     * println!("From: {:?}", message.from);
+     * if message.authenticated {
+     * println!("From (proven): {:?}", message.from);
+     * }
      * println!("Body: {}", message.body);
      * # Ok(())
      * # }
@@ -1066,7 +1163,10 @@ public protocol DidComInterfaceProtocol : AnyObject {
  * # use crate::ffi::DidComInterface;
  * # async fn example() -> Result<(), Box<dyn std::error::Error>> {
  * // Create and initialize the interface
- * let interface = DidComInterface::new("/path/to/db".to_string());
+ * let interface = DidComInterface::new(
+ * "/path/to/db".to_string(),
+ * "did:peer:mediator123".to_string()  // Mediator DID for routing
+ * );
  * let seed = vec![0u8; 32]; // Use a secure seed in production
  * interface.open("/path/to/db".to_string(), seed).await?;
  *
@@ -1077,18 +1177,23 @@ public protocol DidComInterfaceProtocol : AnyObject {
  * ).await?;
  *
  * // Pack a message
- * let message = DidCommMessage {
+ * let message = DIDCommMessage {
  * id: "unique-id".to_string(),
  * msg_type: "https://example.org/protocols/basicmessage/2.0/message".to_string(),
  * body: r#"{"content": "Hello, World!"}"#.to_string(),
  * from: Some(my_did.clone()),
  * to: vec!["did:peer:recipient".to_string()],
+ * // Set by `unpack` only; `pack` ignores them
+ * authenticated: false,
+ * encrypted_from_kid: None,
+ * sign_from: None,
+ * anonymous_sender: false,
  * };
  *
  * let packed = interface.pack(
  * message,
  * my_did,
- * "did:peer:recipient".to_string()
+ * vec!["did:peer:recipient".to_string()]
  * ).await?;
  * # Ok(())
  * # }
@@ -1137,6 +1242,7 @@ open class DidComInterface:
      * # Arguments
      *
      * * `_path` - Database path (currently unused, kept for API compatibility)
+     * * `mediator_did` - The DID of the mediator to use for message routing
      *
      * # Returns
      *
@@ -1147,14 +1253,18 @@ open class DidComInterface:
      *
      * ```ignore
      * # use crate::ffi::DidComInterface;
-     * let interface = DidComInterface::new("/path/to/db".to_string());
+     * let interface = DidComInterface::new(
+     * "/path/to/db".to_string(),
+     * "did:peer:mediator123".to_string()
+     * );
      * ```
      */
-public convenience init(path: String) {
+public convenience init(path: String, mediatorDid: String) {
     let pointer =
         try! rustCall() {
     uniffi_navia_core_fn_constructor_didcominterface_new(
-        FfiConverterString.lower(path),$0
+        FfiConverterString.lower(path),
+        FfiConverterString.lower(mediatorDid),$0
     )
 }
     self.init(unsafeFromRawPointer: pointer)
@@ -1628,7 +1738,10 @@ open func isHealthy()async  -> Bool {
      * ```ignore
      * # use crate::ffi::DidComInterface;
      * # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-     * let interface = DidComInterface::new("/data/navia.db".to_string());
+     * let interface = DidComInterface::new(
+     * "/data/navia.db".to_string(),
+     * "did:peer:mediator123".to_string()
+     * );
      * let seed = generate_secure_seed(); // Your secure seed generation
      * interface.open("/data/navia.db".to_string(), seed).await?;
      * # Ok(())
@@ -1653,11 +1766,11 @@ open func `open`(path: String, seed: Data)async throws  {
 }
     
     /**
-     * Packs (encrypts) a message using DIDComm encryption.
+     * Packs (encrypts) a message using DIDComm encryption with mediator routing.
      *
-     * Creates an encrypted DIDComm message that can only be decrypted by the
-     * intended recipient. The message is also signed by the sender for
-     * authentication.
+     * Creates an encrypted DIDComm message that is wrapped for delivery through
+     * the configured mediator. The message is encrypted for the recipient and
+     * then wrapped in a forward message for the mediator.
      *
      * # Arguments
      *
@@ -1668,17 +1781,17 @@ open func `open`(path: String, seed: Data)async throws  {
      * - `from`: Should match the `from` parameter
      * - `to`: Should contain the `to` parameter
      * * `from` - Sender's DID (must have keys in storage)
-     * * `to` - Recipient's DID (will be resolved to fetch encryption keys)
+     * * `to` - List of recipient DIDs (will be resolved to fetch encryption keys)
      *
      * # Returns
      *
-     * An encrypted DIDComm message as a JSON string, ready for transmission.
+     * An encrypted DIDComm message as a JSON string, ready for transmission to the mediator.
      *
      * # Errors
      *
      * Returns `DidCommError::PackingError` if:
      * - Sender keys not found in storage
-     * - Recipient DID cannot be resolved
+     * - Recipient or mediator DID cannot be resolved
      * - Encryption fails
      *
      * # Example
@@ -1692,27 +1805,107 @@ open func `open`(path: String, seed: Data)async throws  {
      * body: r#"{"content": "Hello!"}"#.to_string(),
      * from: Some("did:peer:my-did".to_string()),
      * to: vec!["did:peer:their-did".to_string()],
+     * authenticated: false,
+     * encrypted_from_kid: None,
+     * sign_from: None,
+     * anonymous_sender: false,
      * };
      *
      * let encrypted = interface.pack(
      * message,
      * "did:peer:my-did".to_string(),
-     * "did:peer:their-did".to_string()
+     * vec!["did:peer:their-did".to_string()]
      * ).await?;
      *
-     * // Send encrypted message over transport
-     * send_message(encrypted);
+     * // Send encrypted message to mediator for delivery
+     * send_to_mediator(encrypted);
      * # Ok(())
      * # }
      * ```
      */
-open func pack(msg: DidCommMessage, from: String, to: String)async throws  -> String {
+open func pack(msg: DidCommMessage, from: String, to: [String])async throws  -> String {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_navia_core_fn_method_didcominterface_pack(
                     self.uniffiClonePointer(),
-                    FfiConverterTypeDIDCommMessage.lower(msg),FfiConverterString.lower(from),FfiConverterString.lower(to)
+                    FfiConverterTypeDIDCommMessage.lower(msg),FfiConverterString.lower(from),FfiConverterSequenceString.lower(to)
+                )
+            },
+            pollFunc: ffi_navia_core_rust_future_poll_rust_buffer,
+            completeFunc: ffi_navia_core_rust_future_complete_rust_buffer,
+            freeFunc: ffi_navia_core_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeDidCommError.lift
+        )
+}
+    
+    /**
+     * Packs (encrypts) a message directly without mediator routing.
+     *
+     * Creates an encrypted DIDComm message that goes directly to the recipient
+     * without any forward wrapping. Use this for mediators or direct peer-to-peer
+     * communication without routing.
+     *
+     * # Arguments
+     *
+     * * `msg` - The message to encrypt, containing:
+     * - `id`: Unique message identifier
+     * - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
+     * - `body`: Message content as JSON string
+     * - `from`: Should match the `from` parameter
+     * - `to`: Should contain the `to` parameter
+     * * `from` - Sender's DID (must have keys in storage)
+     * * `to` - List of recipient DIDs (will be resolved to fetch encryption keys)
+     *
+     * # Returns
+     *
+     * An encrypted DIDComm message as a JSON string, ready for direct transmission.
+     *
+     * # Errors
+     *
+     * Returns `DidCommError::PackingError` if:
+     * - Sender keys not found in storage
+     * - Recipient DID cannot be resolved
+     * - Encryption fails
+     *
+     * # Example
+     *
+     * ```ignore
+     * # use crate::ffi::{DidComInterface, DIDCommMessage};
+     * # async fn example(mediator_interface: &DidComInterface) -> Result<(), Box<dyn std::error::Error>> {
+     * // Mediator forwarding a message to final recipient
+     * let inner_message = DIDCommMessage {
+     * id: "msg-456".to_string(),
+     * msg_type: "https://didcomm.org/basicmessage/2.0/message".to_string(),
+     * body: r#"{"content": "Hello from Alice!"}"#.to_string(),
+     * from: Some("did:peer:alice".to_string()),
+     * to: vec!["did:peer:bob".to_string()],
+     * authenticated: false,
+     * encrypted_from_kid: None,
+     * sign_from: None,
+     * anonymous_sender: false,
+     * };
+     *
+     * let encrypted = mediator_interface.pack_no_forward(
+     * inner_message,
+     * "did:peer:mediator".to_string(),
+     * vec!["did:peer:bob".to_string()]
+     * ).await?;
+     *
+     * // Send directly to recipient
+     * send_to_recipient(encrypted);
+     * # Ok(())
+     * # }
+     * ```
+     */
+open func packNoForward(msg: DidCommMessage, from: String, to: [String])async throws  -> String {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_navia_core_fn_method_didcominterface_pack_no_forward(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeDIDCommMessage.lower(msg),FfiConverterString.lower(from),FfiConverterSequenceString.lower(to)
                 )
             },
             pollFunc: ffi_navia_core_rust_future_poll_rust_buffer,
@@ -1800,6 +1993,25 @@ open func setErrorLoggingEnabled(enabled: Bool)throws  {try rustCallWithError(Ff
      * - `body`: Message body (as JSON string)
      * - `from`: Sender DID (if authenticated)
      * - `to`: List of recipient DIDs
+     * - `authenticated`, `encrypted_from_kid`, `sign_from`, `anonymous_sender`:
+     * how navia-didcomm authenticated the sender (see `DIDCommMessage`).
+     * `authenticated` is `true` only when the plaintext `from` is proven by
+     * the sender key(s) that authenticated the frame and the frame is tied
+     * to this recipient: by authcrypt, or, when a signature is the only
+     * proof, by an encrypted envelope whose every recipient key belongs to
+     * a DID in `to`. A signed message relayed to a recipient its `to` does
+     * not name comes back `false`.
+     *
+     * # Sender check
+     *
+     * An authcrypt frame whose plaintext `from` names another DID than the DID
+     * part of `encrypted_from_kid` (a forged `from`) is refused with
+     * `DidCommError::UnpackingError` ("Sender mismatch: ..."), the permanent
+     * class: a redelivery fails the same way, so a consumer can acknowledge
+     * the frame and drop it. The check runs only when `encrypted_from_kid` is
+     * set. An anoncrypt frame carries no authcrypt sender key: unsigned, it
+     * comes back with `authenticated = false`; signed, `authenticated`
+     * follows the signature and `to` as described above.
      *
      * # Errors
      *
@@ -1818,7 +2030,9 @@ open func setErrorLoggingEnabled(enabled: Bool)throws  {try rustCallWithError(Ff
      * let message = interface.unpack(encrypted_msg).await?;
      *
      * println!("Received message type: {}", message.msg_type);
-     * println!("From: {:?}", message.from);
+     * if message.authenticated {
+     * println!("From (proven): {:?}", message.from);
+     * }
      * println!("Body: {}", message.body);
      * # Ok(())
      * # }
@@ -1955,6 +2169,46 @@ public func FfiConverterTypeDidComInterface_lower(_ value: DidComInterface) -> U
  * * `from` - Optional sender DID. Required for authenticated messages.
  * * `to` - List of recipient DIDs. Must contain at least one recipient for packing.
  *
+ * # Sender authentication fields (set by `unpack` only)
+ *
+ * The last four fields describe how navia-didcomm authenticated the frame
+ * that `unpack` decrypted. They carry meaning only on a message returned by
+ * `unpack`. Every other path that creates a `DIDCommMessage` (a message the
+ * app builds for `pack` / `pack_no_forward`, or any other conversion) sets
+ * `authenticated = false`, both kids to `None` and `anonymous_sender = false`,
+ * and `pack` / `pack_no_forward` ignore whatever the caller puts in them.
+ * UniFFI gives these four fields default values, so Kotlin and Swift callers
+ * that build a message for `pack` can leave them out.
+ *
+ * * `authenticated` - `true` when the plaintext `from` is proven and the
+ * frame is tied to this recipient: `from` is set, navia-didcomm
+ * authenticated the frame (authcrypt with a resolved sender key, or a
+ * verified signature), every sender key it authenticated with
+ * (`encrypted_from_kid`, `sign_from`) belongs to the `from` DID, and
+ * either the frame is authcrypt-encrypted or, when a signature is the only
+ * proof, every recipient key of its encrypted envelope belongs to a DID
+ * named in `to`. An unsigned anoncrypt frame, a plaintext frame, a frame
+ * without `from`, a frame whose signer kid names another DID, and a signed
+ * frame that was never encrypted or was relayed to a recipient its `to`
+ * does not name all come back `false`. (`unpack` refuses an authcrypt
+ * frame whose `from` names another DID than `encrypted_from_kid`
+ * outright.) The key that proves `from` is `encrypted_from_kid` when it is
+ * set and `sign_from` otherwise, so `encrypted_from_kid` can be `None` on
+ * an authenticated message. A consumer that accepts only authcrypt frames checks
+ * `authenticated && encrypted_from_kid.is_some()`. The flag does not make
+ * a frame fresh: a genuine frame can be delivered again, so deduplicate by
+ * `id`.
+ * * `encrypted_from_kid` - Key ID (`did#fragment`) of the sender key that
+ * authcrypt-encrypted the frame; `None` for anoncrypt, signed-only or
+ * plaintext frames.
+ * * `sign_from` - Key ID of the key whose signature navia-didcomm verified;
+ * `None` when the frame was not signed. On a signed frame that is not
+ * authcrypt-encrypted, this is the key that proves `from`.
+ * * `anonymous_sender` - `true` when the frame arrived in an anoncrypt
+ * envelope, which hides the sender from intermediaries (an anoncrypt frame
+ * on its own, or anoncrypt wrapping authcrypt). It says nothing about
+ * whether the sender was authenticated; read `authenticated` for that.
+ *
  * # Examples
  *
  * ```
@@ -1966,6 +2220,11 @@ public func FfiConverterTypeDidComInterface_lower(_ value: DidComInterface) -> U
  * body: "{}".to_string(),
  * from: Some("did:peer:sender123".to_string()),
  * to: vec!["did:peer:recipient456".to_string()],
+ * // Outgoing message: the sender authentication fields stay unset
+ * authenticated: false,
+ * encrypted_from_kid: None,
+ * sign_from: None,
+ * anonymous_sender: false,
  * };
  *
  * // Message with JSON body
@@ -1975,6 +2234,10 @@ public func FfiConverterTypeDidComInterface_lower(_ value: DidComInterface) -> U
  * body: r#"{"content": "Hello, World!", "sent_time": "2024-01-01T12:00:00Z"}"#.to_string(),
  * from: Some("did:peer:alice".to_string()),
  * to: vec!["did:peer:bob".to_string()],
+ * authenticated: false,
+ * encrypted_from_kid: None,
+ * sign_from: None,
+ * anonymous_sender: false,
  * };
  *
  * assert_eq!(message.msg_type, "https://example.org/protocols/1.0/ping");
@@ -1995,13 +2258,37 @@ public struct DidCommMessage {
      */
     public var body: String
     /**
-     * Sender DID (optional for anonymous messages)
+     * Sender DID (optional for anonymous messages). On an unpacked message,
+     * trust it only when `authenticated` is `true`.
      */
     public var from: String?
     /**
      * List of recipient DIDs
      */
     public var to: [String]
+    /**
+     * Set by `unpack` only: `true` when the plaintext `from` is proven by the
+     * sender key(s) navia-didcomm authenticated and the frame is tied to this
+     * recipient (authcrypt, or a signature whose `to` names every recipient
+     * key's DID). `false` on every other path.
+     */
+    public var authenticated: Bool
+    /**
+     * Set by `unpack` only: key ID of the authcrypt sender key, `None` when
+     * the frame was not authcrypt-encrypted. `None` on every other path.
+     */
+    public var encryptedFromKid: String?
+    /**
+     * Set by `unpack` only: key ID of the verified signature, `None` when the
+     * frame was not signed; it proves `from` when `encrypted_from_kid` is
+     * `None`. `None` on every other path.
+     */
+    public var signFrom: String?
+    /**
+     * Set by `unpack` only: `true` when the frame arrived in an anoncrypt
+     * envelope. `false` on every other path.
+     */
+    public var anonymousSender: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -2016,16 +2303,40 @@ public struct DidCommMessage {
          * Message body as JSON string
          */body: String, 
         /**
-         * Sender DID (optional for anonymous messages)
+         * Sender DID (optional for anonymous messages). On an unpacked message,
+         * trust it only when `authenticated` is `true`.
          */from: String?, 
         /**
          * List of recipient DIDs
-         */to: [String]) {
+         */to: [String], 
+        /**
+         * Set by `unpack` only: `true` when the plaintext `from` is proven by the
+         * sender key(s) navia-didcomm authenticated and the frame is tied to this
+         * recipient (authcrypt, or a signature whose `to` names every recipient
+         * key's DID). `false` on every other path.
+         */authenticated: Bool = false, 
+        /**
+         * Set by `unpack` only: key ID of the authcrypt sender key, `None` when
+         * the frame was not authcrypt-encrypted. `None` on every other path.
+         */encryptedFromKid: String? = nil, 
+        /**
+         * Set by `unpack` only: key ID of the verified signature, `None` when the
+         * frame was not signed; it proves `from` when `encrypted_from_kid` is
+         * `None`. `None` on every other path.
+         */signFrom: String? = nil, 
+        /**
+         * Set by `unpack` only: `true` when the frame arrived in an anoncrypt
+         * envelope. `false` on every other path.
+         */anonymousSender: Bool = false) {
         self.id = id
         self.msgType = msgType
         self.body = body
         self.from = from
         self.to = to
+        self.authenticated = authenticated
+        self.encryptedFromKid = encryptedFromKid
+        self.signFrom = signFrom
+        self.anonymousSender = anonymousSender
     }
 }
 
@@ -2048,6 +2359,18 @@ extension DidCommMessage: Equatable, Hashable {
         if lhs.to != rhs.to {
             return false
         }
+        if lhs.authenticated != rhs.authenticated {
+            return false
+        }
+        if lhs.encryptedFromKid != rhs.encryptedFromKid {
+            return false
+        }
+        if lhs.signFrom != rhs.signFrom {
+            return false
+        }
+        if lhs.anonymousSender != rhs.anonymousSender {
+            return false
+        }
         return true
     }
 
@@ -2057,6 +2380,10 @@ extension DidCommMessage: Equatable, Hashable {
         hasher.combine(body)
         hasher.combine(from)
         hasher.combine(to)
+        hasher.combine(authenticated)
+        hasher.combine(encryptedFromKid)
+        hasher.combine(signFrom)
+        hasher.combine(anonymousSender)
     }
 }
 
@@ -2072,7 +2399,11 @@ public struct FfiConverterTypeDIDCommMessage: FfiConverterRustBuffer {
                 msgType: FfiConverterString.read(from: &buf), 
                 body: FfiConverterString.read(from: &buf), 
                 from: FfiConverterOptionString.read(from: &buf), 
-                to: FfiConverterSequenceString.read(from: &buf)
+                to: FfiConverterSequenceString.read(from: &buf), 
+                authenticated: FfiConverterBool.read(from: &buf), 
+                encryptedFromKid: FfiConverterOptionString.read(from: &buf), 
+                signFrom: FfiConverterOptionString.read(from: &buf), 
+                anonymousSender: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -2082,6 +2413,10 @@ public struct FfiConverterTypeDIDCommMessage: FfiConverterRustBuffer {
         FfiConverterString.write(value.body, into: &buf)
         FfiConverterOptionString.write(value.from, into: &buf)
         FfiConverterSequenceString.write(value.to, into: &buf)
+        FfiConverterBool.write(value.authenticated, into: &buf)
+        FfiConverterOptionString.write(value.encryptedFromKid, into: &buf)
+        FfiConverterOptionString.write(value.signFrom, into: &buf)
+        FfiConverterBool.write(value.anonymousSender, into: &buf)
     }
 }
 
@@ -2560,10 +2895,13 @@ private var initializationResult: InitializationResult = {
     if (uniffi_navia_core_checksum_method_didcominterface_is_healthy() != 47035) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_method_didcominterface_open() != 14525) {
+    if (uniffi_navia_core_checksum_method_didcominterface_open() != 17969) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_method_didcominterface_pack() != 58203) {
+    if (uniffi_navia_core_checksum_method_didcominterface_pack() != 14758) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_navia_core_checksum_method_didcominterface_pack_no_forward() != 54410) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_navia_core_checksum_method_didcominterface_remove() != 23360) {
@@ -2572,13 +2910,13 @@ private var initializationResult: InitializationResult = {
     if (uniffi_navia_core_checksum_method_didcominterface_set_error_logging_enabled() != 27864) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_method_didcominterface_unpack() != 30130) {
+    if (uniffi_navia_core_checksum_method_didcominterface_unpack() != 10840) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_navia_core_checksum_method_didcominterface_update() != 38998) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_constructor_didcominterface_new() != 23599) {
+    if (uniffi_navia_core_checksum_constructor_didcominterface_new() != 57499) {
         return InitializationResult.apiChecksumMismatch
     }
 

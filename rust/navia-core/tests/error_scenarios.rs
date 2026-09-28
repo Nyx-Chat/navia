@@ -96,6 +96,10 @@ fn test_pack_without_recipient_keys() {
         body: "Hello".to_string(),
         from: Some(sender_did.clone()),
         to: vec![fake_recipient.to_string()],
+        authenticated: false,
+        encrypted_from_kid: None,
+        sign_from: None,
+        anonymous_sender: false,
     };
 
     // This should fail because we can't resolve the recipient's keys
@@ -169,6 +173,10 @@ fn test_unpack_message_for_wrong_recipient() {
         body: r#"{"content": "Secret message for Bob only"}"#.to_string(),
         from: Some(alice_did.clone()),
         to: vec![bob_did.clone()],
+        authenticated: false,
+        encrypted_from_kid: None,
+        sign_from: None,
+        anonymous_sender: false,
     };
 
     // Alice packs the message for Bob (wrapped for mediator delivery)
@@ -316,6 +324,10 @@ fn test_malformed_json_body_handling() {
         body: malformed_json.to_string(),
         from: Some(user_did.clone()),
         to: vec![user_did.clone()],
+        authenticated: false,
+        encrypted_from_kid: None,
+        sign_from: None,
+        anonymous_sender: false,
     };
 
     // Should still pack successfully (body is treated as string)

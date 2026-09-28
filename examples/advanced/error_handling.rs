@@ -71,6 +71,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         body: "{}".to_string(),
         from: Some(alice_did.clone()),
         to: vec![], // Empty!
+        authenticated: false,
+        encrypted_from_kid: None,
+        sign_from: None,
+        anonymous_sender: false,
     };
 
     match interface
