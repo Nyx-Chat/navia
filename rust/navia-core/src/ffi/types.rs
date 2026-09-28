@@ -13,7 +13,10 @@
 /// * `id` - Unique message identifier. Should be a UUID or similar unique string.
 /// * `msg_type` - Message type URI indicating the protocol and message type
 ///   (e.g., "https://didcomm.org/basicmessage/2.0/message")
-/// * `body` - Message body as a JSON string. The structure depends on the protocol.
+/// * `body` - Message body text: JSON text for an object/array body, plain text
+///   for a string body. `unpack` returns a string body verbatim, so plain text
+///   round-trips unchanged. The structure depends on the protocol; the full
+///   body rule lives in `ffi::conversions`.
 /// * `from` - Optional sender DID. Required for authenticated messages.
 /// * `to` - List of recipient DIDs. Must contain at least one recipient for packing.
 ///
@@ -48,7 +51,7 @@ pub struct DIDCommMessage {
     pub id: String,
     /// Protocol message type URI
     pub msg_type: String,
-    /// Message body as JSON string
+    /// Message body: JSON text for an object/array body, plain text for a string body
     pub body: String,
     /// Sender DID (optional for anonymous messages)
     pub from: Option<String>,
