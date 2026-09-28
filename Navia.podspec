@@ -21,9 +21,6 @@ Pod::Spec.new do |spec|
   spec.source_files  = "ios/Navia/**/*.{h,swift}"
   spec.public_header_files = "ios/Navia/Navia.h", "ios/Navia/Generated/navia_coreFFI.h"
 
-  # Pre-built Rust library
-  spec.vendored_libraries = "rust/target/universal/release/libnavia_core.a"
-
   # System frameworks required by the Rust library
   spec.frameworks = "Foundation", "Security"
 

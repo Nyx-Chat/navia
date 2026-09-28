@@ -30,7 +30,7 @@ Add to your app's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.nyx:navia:1.1.28")
+    implementation("com.nyx:navia:1.3.2")
     implementation("net.java.dev.jna:jna:5.17.0@aar")
 }
 ```
@@ -40,7 +40,7 @@ dependencies {
 Add to your `Podfile`:
 
 ```ruby
-pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.1.28'
+pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.3.2'
 ```
 
 ### Basic Usage

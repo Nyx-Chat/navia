@@ -15,7 +15,7 @@ jobs:
     name: Check Dependencies
     runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
@@ -50,7 +50,7 @@ jobs:
     name: Check Unsafe Code
     runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Check for unsafe code
         run: |
@@ -69,7 +69,7 @@ jobs:
     name: Check TODOs
     runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Check for TODOs
         run: |
