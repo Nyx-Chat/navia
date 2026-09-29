@@ -12,18 +12,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic 16KB alignment verification during build process
 - Post-build alignment fix tools for native libraries
 - CI/CD validation for 16KB alignment on all releases
-- `DIDCommMessage` gains four sender authentication fields that `DidComInterface.unpack` fills from navia-didcomm's unpack metadata: `authenticated`, `encrypted_from_kid` (Kotlin/Swift `encryptedFromKid`), `sign_from` (`signFrom`) and `anonymous_sender` (`anonymousSender`). `authenticated` is `true` only when the plaintext `from` is set, navia-didcomm authenticated the frame (authcrypt with a resolved sender key, or a verified signature), every sender key it used belongs to the `from` DID, and the frame is tied to the recipient: it is authcrypt-encrypted, or, when a signature is the only proof, every recipient key of its encrypted envelope belongs to a DID named in the plaintext `to`. A consumer acts on `from` only when it is `true`. The key that proves `from` is `encrypted_from_kid` when it is set and `sign_from` otherwise, so `encrypted_from_kid` can be `null` / `nil` on an authenticated message; a consumer that accepts only authcrypt proof checks `authenticated && encryptedFromKid != null`. The flag says nothing about freshness, so consumers still deduplicate by `id`. The kids are the raw key IDs (`did#fragment`); `anonymous_sender` is `true` for a frame that arrived in an anoncrypt envelope. The fields carry meaning only on a message returned by `unpack`: every other path that creates a `DIDCommMessage` sets `false` / `None`, and `pack` / `pack_no_forward` ignore them. They have UniFFI defaults (`false` / `null` / `nil`), so Kotlin and Swift code that builds a `DidCommMessage` without them keeps compiling; Rust struct literals must name them. This changes a UniFFI record, so the release that ships it is a minor bump to **1.4.0**, made in the separate version-bump PR; consumers rebuild against the 1.4.0 AAR / xcframework bindings. Other FFI signatures are unchanged. The committed Swift bindings in `ios/Navia/Generated/` are regenerated; they also catch up on `mediatorDid`, `packNoForward` and `to: [String]`, which the committed copy had missed.
 
 ### Changed
 - Updated minimum Android NDK requirement from r25b to r27c for 16KB support
 - Removed cargo-ndk from build process as it interferes with alignment flags
 - Updated CI/CD workflows to use NDK r27c and verify alignment
 - Enhanced build scripts with automatic alignment fixes
-- `DidComInterface.unpack` refuses an authcrypt frame whose plaintext `from` names another DID than the DID part of `encrypted_from_kid` (a forged `from`) with `DidCommError::UnpackingError` (`Sender mismatch: ...`; the message names neither DID). The failure is permanent (Kotlin `DidCommException.UnpackingException`, Swift `DidCommError.UnpackingError`): a redelivery fails the same way, so a consumer acknowledges the frame and drops it. The check runs only when `encrypted_from_kid` is set. Unsigned anoncrypt frames carry no sender key and still unpack, with `authenticated = false`; so does a frame that is not authcrypt-encrypted and whose signer kid names another DID than `from`, and a signed frame that is not authcrypt-encrypted and was never encrypted or was re-encrypted to a recipient key whose DID its `to` does not name (a message Alice signed for Mallory that Mallory relays to Bob). navia-didcomm does not compare `to` with the envelope's recipient keys, and it lists every recipient key of the envelope, so every one of them has to belong to a DID in `to`.
 
 ### Fixed
 - Native libraries now properly align all LOAD segments to 16KB boundaries
 - Resolved Google Play Store rejection for Android 15+ compatibility
+
+## [1.4.0] - 2026-09-29
+
+### Added
+- `DIDCommMessage` gains four sender authentication fields that
+  `DidComInterface.unpack` fills from navia-didcomm's unpack metadata:
+  `authenticated`, `encrypted_from_kid` (Kotlin/Swift `encryptedFromKid`),
+  `sign_from` (`signFrom`) and `anonymous_sender` (`anonymousSender`).
+  `authenticated` is `true` only when the plaintext `from` is set, navia-didcomm
+  authenticated the frame (authcrypt with a resolved sender key, or a verified
+  signature), every sender key it used belongs to the `from` DID, and the frame
+  is tied to the recipient: it is authcrypt-encrypted, or, when a signature is
+  the only proof, every recipient key of its encrypted envelope belongs to a DID
+  named in the plaintext `to`. A consumer acts on `from` only when it is `true`.
+  The key that proves `from` is `encrypted_from_kid` when it is set and
+  `sign_from` otherwise, so `encrypted_from_kid` can be `null` / `nil` on an
+  authenticated message; a consumer that accepts only authcrypt proof checks
+  `authenticated && encryptedFromKid != null`. The flag says nothing about
+  freshness, so consumers still deduplicate by `id`. The kids are the raw key
+  IDs (`did#fragment`); `anonymous_sender` is `true` for a frame that arrived in
+  an anoncrypt envelope. The fields carry meaning only on a message returned by
+  `unpack`: every other path that creates a `DIDCommMessage` sets `false` /
+  `None`, and `pack` / `pack_no_forward` ignore them. They have UniFFI defaults
+  (`false` / `null` / `nil`), so Kotlin and Swift code that builds a
+  `DidCommMessage` without them keeps compiling; Rust struct literals must name
+  them. This changes a UniFFI record, so this release is a minor bump to **1.4.0**; consumers rebuild
+  against the 1.4.0 AAR / xcframework bindings. Other FFI signatures are
+  unchanged. The committed Swift bindings in `ios/Navia/Generated/` are
+  regenerated; they also catch up on `mediatorDid`, `packNoForward` and `to:
+  [String]`, which the committed copy had missed. (#81)
+
+### Changed
+- `DidComInterface.unpack` refuses an authcrypt frame whose plaintext `from`
+  names another DID than the DID part of `encrypted_from_kid` (a forged `from`)
+  with `DidCommError::UnpackingError` (`Sender mismatch: ...`; the message names
+  neither DID). The failure is permanent (Kotlin
+  `DidCommException.UnpackingException`, Swift `DidCommError.UnpackingError`): a
+  redelivery fails the same way, so a consumer acknowledges the frame and drops
+  it. The check runs only when `encrypted_from_kid` is set. Unsigned anoncrypt
+  frames carry no sender key and still unpack, with `authenticated = false`; so
+  does a frame that is not authcrypt-encrypted and whose signer kid names
+  another DID than `from`, and a signed frame that is not authcrypt-encrypted
+  and was never encrypted or was re-encrypted to a recipient key whose DID its
+  `to` does not name (a message Alice signed for Mallory that Mallory relays to
+  Bob). navia-didcomm does not compare `to` with the envelope's recipient keys,
+  and it lists every recipient key of the envelope, so every one of them has to
+  belong to a DID in `to`. (#81)
+- The classifier docs (`handler.rs`, `docs/API.md`) describe the redelivery cap a
+  consumer applies to a `DatabaseError` as per frame (the stored payload with the
+  mediator's `delivery_id` left out), since the mediator mints a new `delivery_id`
+  for every delivery and accepts an ACK for any of them (#81).
+
+### Compatibility
+- Minor release: the UniFFI record `DIDCommMessage` gains `authenticated`,
+  `encryptedFromKid`, `signFrom` and `anonymousSender`, so the generated Kotlin
+  and Swift bindings change (the `unpack` method checksum changes as well, since
+  its docstring is part of it); consumers rebuild against the 1.4.0 AAR /
+  xcframework. The new fields carry UniFFI defaults, so Kotlin and Swift code
+  that builds a `DidCommMessage` by name keeps compiling; Rust struct literals
+  must name them. Every other FFI signature is unchanged.
+- The DIDComm wire format is unchanged; navia-server and nyx-org-gateway need no
+  update, and 1.3.3 and 1.4.0 clients interoperate.
+- Behaviour change: an authcrypt frame whose plaintext `from` names another DID
+  than the DID of `encryptedFromKid` now fails to unpack with
+  `UnpackingException` / `UnpackingError` (permanent; acknowledge and drop).
+  Genuine Navia traffic is unaffected: navia-didcomm refuses to pack a message
+  whose plaintext `from` is not the DID whose key encrypts, so every frame `pack`
+  produces already satisfies the check.
 
 ## [1.3.3] - 2026-09-28
 

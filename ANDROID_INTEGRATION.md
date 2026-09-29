@@ -19,7 +19,7 @@ Add the Navia library to your module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.navia:navia-android:1.1.2")
+    implementation("com.nyx:navia:1.4.0")
 }
 ```
 
