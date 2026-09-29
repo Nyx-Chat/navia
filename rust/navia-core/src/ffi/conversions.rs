@@ -195,6 +195,10 @@ mod tests {
             body: text.to_string(),
             from: Some(ALICE.to_string()),
             to: vec![BOB.to_string()],
+            authenticated: false,
+            encrypted_from_kid: None,
+            sign_from: None,
+            anonymous_sender: false,
         };
         let core: Message = outgoing.into();
         let wire_json =
