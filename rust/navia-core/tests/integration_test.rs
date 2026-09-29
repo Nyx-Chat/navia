@@ -363,6 +363,10 @@ fn test_plain_string_body_roundtrip() {
             body: body.to_string(),
             from: Some(did.clone()),
             to: vec![did.clone()],
+            authenticated: false,
+            encrypted_from_kid: None,
+            sign_from: None,
+            anonymous_sender: false,
         };
 
         let packed = block_on(interface.pack_no_forward(message, did.clone(), vec![did.clone()]))
