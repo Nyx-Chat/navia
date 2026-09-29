@@ -77,7 +77,7 @@ gpr.token=ghp_xxxxxxxxxxxxxxxxxxxx
 3. Test direct download:
 ```bash
 curl -H "Authorization: token YOUR_TOKEN" \
-  https://maven.pkg.github.com/Nyx-Chat/navia/com/nyx/navia/1.1.2/navia-1.1.2.aar
+  https://maven.pkg.github.com/Nyx-Chat/navia/com/nyx/navia/1.4.0/navia-1.4.0.aar
 ```
 
 ## Runtime Errors
@@ -475,7 +475,7 @@ If you're still experiencing issues:
 ```kotlin
 fun gatherDebugInfo(): String {
     return """
-        Navia Version: 1.1.2
+        Navia Version: 1.4.0
         Android Version: ${Build.VERSION.RELEASE}
         Device: ${Build.MANUFACTURER} ${Build.MODEL}
         ABI: ${Build.SUPPORTED_ABIS.joinToString()}
