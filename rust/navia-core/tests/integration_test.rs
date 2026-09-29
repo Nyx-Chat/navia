@@ -336,3 +336,43 @@ fn test_message_with_complex_body() {
     assert_eq!(parsed["attachments"][0]["id"], "attachment-1");
     assert_eq!(parsed["metadata"]["priority"], "high");
 }
+
+#[test]
+fn test_plain_string_body_roundtrip() {
+    // Plain-text bodies travel as JSON strings and come back from unpack
+    // verbatim, without JSON quoting (regression guard for 1.3.2).
+    let (interface, _temp_dir) = create_simple_test_db();
+
+    let did = block_on(interface.generate_did("https://example.com/didcomm".to_string(), vec![]))
+        .expect("Failed to generate DID");
+
+    let bodies = [
+        "hello",
+        "",
+        "42",
+        "true",
+        "null",
+        "say \"hi\"\n\u{2713}",
+        "{broken",
+    ];
+
+    for (index, body) in bodies.iter().enumerate() {
+        let message = DIDCommMessage {
+            id: format!("plain-body-{index}"),
+            msg_type: "https://didcomm.org/basicmessage/2.0/message".to_string(),
+            body: body.to_string(),
+            from: Some(did.clone()),
+            to: vec![did.clone()],
+        };
+
+        let packed = block_on(interface.pack_no_forward(message, did.clone(), vec![did.clone()]))
+            .expect("Failed to pack plain-text message");
+        let unpacked = block_on(interface.unpack(packed)).expect("Failed to unpack message");
+
+        assert_eq!(
+            unpacked.body, *body,
+            "body {body:?} changed in the round trip"
+        );
+        assert_eq!(unpacked.id, format!("plain-body-{index}"));
+    }
+}

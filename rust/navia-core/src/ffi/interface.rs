@@ -4,13 +4,13 @@
 //! applications use to interact with the navia library.
 
 use crate::core::audit::{audit_log, SecurityEvent, StorageOperation};
-use crate::core::didcomm::handler::{audit_pack, message_to_didcomm, DidcommMessaging};
+use crate::core::didcomm::handler::{
+    audit_pack, map_unpacking_error, message_to_didcomm, DidcommMessaging,
+};
 use crate::core::didcomm::message::Message;
 use crate::core::validation::{
     validate_message_body, validate_seed, validate_storage_category, validate_storage_key,
 };
-use crate::error::specific::UnpackingError;
-use crate::error::NaviaError;
 use crate::ffi::types::{DIDCommMessage, DidCommError, KeyValue};
 use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
 use askar_storage::generate_raw_store_key;
@@ -100,6 +100,15 @@ impl DidComInterface {
         DidCommError::DatabaseError {
             message: err.to_string(),
         }
+    }
+
+    /// Maps a failed unpack to the FFI error its classification calls for.
+    ///
+    /// `UnpackingError` for a frame that can never be unpacked, `DatabaseError`
+    /// for a failure a later attempt can get past (see `map_unpacking_error`).
+    /// Both unpack branches use it, so they classify the same way.
+    fn map_unpack_error(err: navia_messaging::error::Error) -> DidCommError {
+        DidCommError::from(map_unpacking_error(err))
     }
 
     /// Fetches multiple values from storage and converts them to KeyValue objects
@@ -291,7 +300,9 @@ impl DidComInterface {
     /// A `DIDCommMessage` containing:
     /// - `id`: Message identifier
     /// - `msg_type`: Protocol message type  
-    /// - `body`: Message body (as JSON string)
+    /// - `body`: Message body text. A JSON-string body comes back verbatim as
+    ///   plain text; an object, array, number, bool or null body comes back as
+    ///   its compact JSON text (see `ffi::conversions` for the body rule)
     /// - `from`: Sender DID (if authenticated)
     /// - `to`: List of recipient DIDs
     /// - `authenticated`, `encrypted_from_kid`, `sign_from`, `anonymous_sender`:
@@ -316,11 +327,23 @@ impl DidComInterface {
     ///
     /// # Errors
     ///
-    /// Returns `DidCommError::UnpackingError` if:
-    /// - Message is malformed or corrupted
-    /// - Decryption fails (wrong recipient)
-    /// - Signature verification fails
-    /// - Required keys are not found in storage
+    /// - `DidCommError::UnpackingError` when the frame itself can never be
+    ///   unpacked, so a redelivery fails the same way: it is not a well-formed
+    ///   JWE/JWS/JWM, has a wrong signature or an illegal argument, is addressed
+    ///   to keys this store does not hold, or uses unsupported or incompatible
+    ///   crypto. A consumer can acknowledge such a frame to the mediator.
+    /// - `DidCommError::DatabaseError` when the store, I/O or DID resolution
+    ///   failed; a later attempt can succeed, so leave the frame for redelivery.
+    ///   navia-didcomm 1.3.0 also reports some faults of the frame itself this
+    ///   way, because it gives them `InvalidState`: truncated JSON in the
+    ///   envelope or protected header (an empty frame included), since
+    ///   serde_json's `Eof` maps to `InvalidState`; a wrong skid; an
+    ///   anoncrypt/authcrypt recipient mismatch; a JWS signature kid that does
+    ///   not match. It gives a sender kid missing from its DID document
+    ///   `DIDUrlNotFound`. Those fail the same way on every redelivery, so a
+    ///   consumer should cap redeliveries per `delivery_id`.
+    /// - `DidCommError::GeneralError` when the interface is not open or the
+    ///   runtime task fails.
     ///
     /// # Example
     ///
@@ -345,14 +368,10 @@ impl DidComInterface {
         // Check if we're already in a Tokio context
         let (message, metadata) = if Handle::try_current().is_ok() {
             // We're in a context, proceed normally
-            messaging.unpack_message(&msg).await.map_err(|e| {
-                // Use NaviaError for automatic error logging
-                let navia_err: NaviaError = UnpackingError::MalformedMessage {
-                    details: e.to_string(),
-                }
-                .into();
-                DidCommError::from(navia_err)
-            })?
+            messaging
+                .unpack_message(&msg)
+                .await
+                .map_err(Self::map_unpack_error)?
         } else {
             // We need to provide context - use our runtime
             let runtime = self.runtime.clone();
@@ -364,14 +383,7 @@ impl DidComInterface {
                 .map_err(|e| DidCommError::GeneralError {
                     message: e.to_string(),
                 })?
-                .map_err(|e| {
-                    // Use NaviaError for automatic error logging
-                    let navia_err: NaviaError = UnpackingError::MalformedMessage {
-                        details: e.to_string(),
-                    }
-                    .into();
-                    DidCommError::from(navia_err)
-                })?
+                .map_err(Self::map_unpack_error)?
         };
 
         // Bind the plaintext `from` to the sender keys (refusing a forged
@@ -390,7 +402,9 @@ impl DidComInterface {
     /// * `msg` - The message to encrypt, containing:
     ///   - `id`: Unique message identifier
     ///   - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-    ///   - `body`: Message content as JSON string
+    ///   - `body`: Message content. Text whose first non-whitespace char is `{`
+    ///     or `[` and that parses as JSON travels as that object or array; any
+    ///     other text travels as a JSON string
     ///   - `from`: Should match the `from` parameter
     ///   - `to`: Should contain the `to` parameter
     /// * `from` - Sender's DID (must have keys in storage)
@@ -508,7 +522,9 @@ impl DidComInterface {
     /// * `msg` - The message to encrypt, containing:
     ///   - `id`: Unique message identifier
     ///   - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-    ///   - `body`: Message content as JSON string
+    ///   - `body`: Message content. Text whose first non-whitespace char is `{`
+    ///     or `[` and that parses as JSON travels as that object or array; any
+    ///     other text travels as a JSON string
     ///   - `from`: Should match the `from` parameter
     ///   - `to`: Should contain the `to` parameter
     /// * `from` - Sender's DID (must have keys in storage)

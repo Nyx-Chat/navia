@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name          = "Navia"
-  spec.version       = "1.2.8"
+  spec.version       = "1.3.3"
   spec.summary       = "Secure DIDComm v2 messaging library for iOS"
   spec.description   = <<-DESC
                        Navia is a secure DIDComm v2 messaging library for mobile applications,
@@ -20,9 +20,6 @@ Pod::Spec.new do |spec|
 
   spec.source_files  = "ios/Navia/**/*.{h,swift}"
   spec.public_header_files = "ios/Navia/Navia.h", "ios/Navia/Generated/navia_coreFFI.h"
-
-  # Pre-built Rust library
-  spec.vendored_libraries = "rust/target/universal/release/libnavia_core.a"
 
   # System frameworks required by the Rust library
   spec.frameworks = "Foundation", "Security"

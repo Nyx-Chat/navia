@@ -9,7 +9,7 @@ This guide covers how to integrate Navia into your iOS application.
 Add to your `Podfile`:
 
 ```ruby
-pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.1.28'
+pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.3.3'
 ```
 
 Then run:
@@ -23,7 +23,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Nyx-Chat/navia.git", .exact("1.1.28"))
+    .package(url: "https://github.com/Nyx-Chat/navia.git", .exact("1.3.3"))
 ]
 ```
 
