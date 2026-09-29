@@ -63,6 +63,9 @@ impl From<DIDCommMessage> for Message {
 
 /// Converts core Message to FFI DIDCommMessage type.
 ///
+/// The sender authentication fields stay unset (`authenticated = false`,
+/// `None` kids, `anonymous_sender = false`): only `unpack` sets them.
+///
 /// This conversion serializes the message body:
 /// - String bodies are passed through as-is
 /// - Object bodies are serialized to JSON strings
@@ -86,6 +89,11 @@ impl From<Message> for DIDCommMessage {
             body,
             from: core_msg.from,
             to: core_msg.to,
+            // Sender authentication is set by `unpack` only
+            authenticated: false,
+            encrypted_from_kid: None,
+            sign_from: None,
+            anonymous_sender: false,
         }
     }
 }
@@ -147,6 +155,12 @@ impl From<NaviaMessage> for DIDCommMessage {
             body,
             from: msg.from,
             to: msg.to.unwrap_or_default(),
+            // Without unpack metadata nothing is proven about the sender;
+            // `DIDCommMessage::from_unpacked` fills these in for `unpack`
+            authenticated: false,
+            encrypted_from_kid: None,
+            sign_from: None,
+            anonymous_sender: false,
         }
     }
 }
@@ -181,6 +195,10 @@ mod tests {
             body: text.to_string(),
             from: Some(ALICE.to_string()),
             to: vec![BOB.to_string()],
+            authenticated: false,
+            encrypted_from_kid: None,
+            sign_from: None,
+            anonymous_sender: false,
         };
         let core: Message = outgoing.into();
         let wire_json =

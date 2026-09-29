@@ -71,6 +71,17 @@ val message = DidCommMessage(
 )
 
 val encrypted = didcomm.pack(message, myDid, recipientDid)
+
+// Receive: act on `from` only when unpack proved it
+val received = didcomm.unpack(incomingFrame)
+val sender = received.from
+if (received.authenticated && sender != null) {
+    // sender is the DID of the key that proves it: received.encryptedFromKid
+    // for an authcrypt frame (what Navia's pack sends), received.signFrom
+    // otherwise. encryptedFromKid is null on a signature-only frame; require
+    // it too if you accept authcrypt proof only.
+    handleMessageFrom(sender, received)
+}
 ```
 
 #### iOS (Swift)
@@ -99,7 +110,27 @@ let message = DIDCommMessage(
 )
 
 let encrypted = try await didcomm.pack(msg: message, from: myDid, to: recipientDid)
+
+// Receive: act on `from` only when unpack proved it
+let received = try await didcomm.unpack(msg: incomingFrame)
+if received.authenticated, let sender = received.from {
+    // sender is the DID of the key that proves it: received.encryptedFromKid
+    // for an authcrypt frame (what Navia's pack sends), received.signFrom
+    // otherwise. encryptedFromKid is nil on a signature-only frame; require
+    // it too if you accept authcrypt proof only.
+    handleMessage(from: sender, received)
+}
 ```
+
+`unpack` fills `authenticated`, `encryptedFromKid`, `signFrom` and
+`anonymousSender` from the unpack metadata and refuses an authcrypt frame whose
+plaintext `from` names another DID than its sender key (`UnpackingError`).
+`authenticated` also requires the frame to be tied to you: authcrypt does that
+on its own; a signature-only frame needs every recipient key of its envelope
+to belong to a DID in its `to`, so a message signed for someone else and
+relayed to you comes back `false`. A message you build for `pack` leaves
+these four fields at their defaults; see
+[Sender authentication fields](docs/API.md#sender-authentication-fields).
 
 For detailed integration instructions, see the [Android Integration Guide](docs/ANDROID_INTEGRATION.md) or [iOS Integration Guide](docs/IOS_INTEGRATION.md).
 

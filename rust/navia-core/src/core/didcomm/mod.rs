@@ -6,3 +6,4 @@ pub mod did;
 pub mod encryption;
 pub mod handler;
 pub mod message;
+pub mod sender;

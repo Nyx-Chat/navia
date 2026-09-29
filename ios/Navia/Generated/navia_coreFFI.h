@@ -263,7 +263,7 @@ void uniffi_navia_core_fn_free_didcominterface(void*_Nonnull ptr, RustCallStatus
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_CONSTRUCTOR_DIDCOMINTERFACE_NEW
 #define UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_CONSTRUCTOR_DIDCOMINTERFACE_NEW
-void*_Nonnull uniffi_navia_core_fn_constructor_didcominterface_new(RustBuffer _path, RustCallStatus *_Nonnull out_status
+void*_Nonnull uniffi_navia_core_fn_constructor_didcominterface_new(RustBuffer _path, RustBuffer mediator_did, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_METHOD_DIDCOMINTERFACE_CHECK_HEALTH
@@ -324,6 +324,11 @@ uint64_t uniffi_navia_core_fn_method_didcominterface_open(void*_Nonnull ptr, Rus
 #ifndef UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_METHOD_DIDCOMINTERFACE_PACK
 #define UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_METHOD_DIDCOMINTERFACE_PACK
 uint64_t uniffi_navia_core_fn_method_didcominterface_pack(void*_Nonnull ptr, RustBuffer msg, RustBuffer from, RustBuffer to
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_METHOD_DIDCOMINTERFACE_PACK_NO_FORWARD
+#define UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_METHOD_DIDCOMINTERFACE_PACK_NO_FORWARD
+uint64_t uniffi_navia_core_fn_method_didcominterface_pack_no_forward(void*_Nonnull ptr, RustBuffer msg, RustBuffer from, RustBuffer to
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_FN_METHOD_DIDCOMINTERFACE_REMOVE
@@ -695,6 +700,12 @@ uint16_t uniffi_navia_core_checksum_method_didcominterface_open(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_CHECKSUM_METHOD_DIDCOMINTERFACE_PACK
 #define UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_CHECKSUM_METHOD_DIDCOMINTERFACE_PACK
 uint16_t uniffi_navia_core_checksum_method_didcominterface_pack(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_CHECKSUM_METHOD_DIDCOMINTERFACE_PACK_NO_FORWARD
+#define UNIFFI_FFIDEF_UNIFFI_NAVIA_CORE_CHECKSUM_METHOD_DIDCOMINTERFACE_PACK_NO_FORWARD
+uint16_t uniffi_navia_core_checksum_method_didcominterface_pack_no_forward(void
     
 );
 #endif

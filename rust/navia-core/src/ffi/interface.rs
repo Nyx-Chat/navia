@@ -58,6 +58,11 @@ use zeroize::Zeroize;
 ///     body: r#"{"content": "Hello, World!"}"#.to_string(),
 ///     from: Some(my_did.clone()),
 ///     to: vec!["did:peer:recipient".to_string()],
+///     // Set by `unpack` only; `pack` ignores them
+///     authenticated: false,
+///     encrypted_from_kid: None,
+///     sign_from: None,
+///     anonymous_sender: false,
 /// };
 ///
 /// let packed = interface.pack(
@@ -300,6 +305,25 @@ impl DidComInterface {
     ///   its compact JSON text (see `ffi::conversions` for the body rule)
     /// - `from`: Sender DID (if authenticated)
     /// - `to`: List of recipient DIDs
+    /// - `authenticated`, `encrypted_from_kid`, `sign_from`, `anonymous_sender`:
+    ///   how navia-didcomm authenticated the sender (see `DIDCommMessage`).
+    ///   `authenticated` is `true` only when the plaintext `from` is proven by
+    ///   the sender key(s) that authenticated the frame and the frame is tied
+    ///   to this recipient: by authcrypt, or, when a signature is the only
+    ///   proof, by an encrypted envelope whose every recipient key belongs to
+    ///   a DID in `to`. A signed message relayed to a recipient its `to` does
+    ///   not name comes back `false`.
+    ///
+    /// # Sender check
+    ///
+    /// An authcrypt frame whose plaintext `from` names another DID than the DID
+    /// part of `encrypted_from_kid` (a forged `from`) is refused with
+    /// `DidCommError::UnpackingError` ("Sender mismatch: ..."), the permanent
+    /// class: a redelivery fails the same way, so a consumer can acknowledge
+    /// the frame and drop it. The check runs only when `encrypted_from_kid` is
+    /// set. An anoncrypt frame carries no authcrypt sender key: unsigned, it
+    /// comes back with `authenticated = false`; signed, `authenticated`
+    /// follows the signature and `to` as described above.
     ///
     /// # Errors
     ///
@@ -330,7 +354,9 @@ impl DidComInterface {
     /// let message = interface.unpack(encrypted_msg).await?;
     ///
     /// println!("Received message type: {}", message.msg_type);
-    /// println!("From: {:?}", message.from);
+    /// if message.authenticated {
+    ///     println!("From (proven): {:?}", message.from);
+    /// }
     /// println!("Body: {}", message.body);
     /// # Ok(())
     /// # }
@@ -340,7 +366,7 @@ impl DidComInterface {
         let messaging = self.get_messaging()?;
 
         // Check if we're already in a Tokio context
-        let (message, _metadata) = if Handle::try_current().is_ok() {
+        let (message, metadata) = if Handle::try_current().is_ok() {
             // We're in a context, proceed normally
             messaging
                 .unpack_message(&msg)
@@ -360,8 +386,9 @@ impl DidComInterface {
                 .map_err(Self::map_unpack_error)?
         };
 
-        // Convert core Message to FFI DIDCommMessage
-        Ok(message.into())
+        // Bind the plaintext `from` to the sender keys (refusing a forged
+        // authcrypt `from`) and convert to the FFI DIDCommMessage
+        DIDCommMessage::from_unpacked(message, &metadata).map_err(DidCommError::from)
     }
 
     /// Packs (encrypts) a message using DIDComm encryption with mediator routing.
@@ -405,6 +432,10 @@ impl DidComInterface {
     ///     body: r#"{"content": "Hello!"}"#.to_string(),
     ///     from: Some("did:peer:my-did".to_string()),
     ///     to: vec!["did:peer:their-did".to_string()],
+    ///     authenticated: false,
+    ///     encrypted_from_kid: None,
+    ///     sign_from: None,
+    ///     anonymous_sender: false,
     /// };
     ///
     /// let encrypted = interface.pack(
@@ -522,6 +553,10 @@ impl DidComInterface {
     ///     body: r#"{"content": "Hello from Alice!"}"#.to_string(),
     ///     from: Some("did:peer:alice".to_string()),
     ///     to: vec!["did:peer:bob".to_string()],
+    ///     authenticated: false,
+    ///     encrypted_from_kid: None,
+    ///     sign_from: None,
+    ///     anonymous_sender: false,
     /// };
     ///
     /// let encrypted = mediator_interface.pack_no_forward(

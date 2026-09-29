@@ -187,7 +187,9 @@ pub fn classify_unpack_failure(err: &navia_messaging::error::Error) -> UnpackFai
 /// that does not match. It gives a sender kid missing from its DID document
 /// `DIDUrlNotFound`. The kind alone cannot tell those apart from a store or
 /// resolution failure, so they stay transient here too and fail the same way on
-/// every redelivery; a consumer has to cap redeliveries per `delivery_id`.
+/// every redelivery; a consumer has to cap redeliveries per frame (the stored
+/// payload with the mediator's `delivery_id` left out, since the mediator mints a
+/// new `delivery_id` for every delivery).
 fn classify_didcomm_kind(kind: navia_didcomm::error::ErrorKind) -> UnpackFailure {
     use navia_didcomm::error::ErrorKind;
 
@@ -211,7 +213,7 @@ fn classify_didcomm_kind(kind: navia_didcomm::error::ErrorKind) -> UnpackFailure
 /// `StorageError::OperationFailed`, which reaches the FFI as
 /// `DidCommError::DatabaseError` (Kotlin `DidCommException.DatabaseException`),
 /// the variant navia-core already uses for navia-messaging failures; a consumer
-/// leaves that frame for redelivery, with a cap per `delivery_id`, because some
+/// leaves that frame for redelivery, with a cap per frame, because some
 /// faults of the frame itself land here too (see `classify_didcomm_kind`). Both
 /// conversions go through the `From` impls, so the failure is still counted in
 /// the metrics.
