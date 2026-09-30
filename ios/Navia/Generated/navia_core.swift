@@ -900,7 +900,9 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * * `msg` - The message to encrypt, containing:
      * - `id`: Unique message identifier
      * - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-     * - `body`: Message content as JSON string
+     * - `body`: Message content. Text whose first non-whitespace char is `{`
+     * or `[` and that parses as JSON travels as that object or array; any
+     * other text travels as a JSON string
      * - `from`: Should match the `from` parameter
      * - `to`: Should contain the `to` parameter
      * * `from` - Sender's DID (must have keys in storage)
@@ -960,7 +962,9 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * * `msg` - The message to encrypt, containing:
      * - `id`: Unique message identifier
      * - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-     * - `body`: Message content as JSON string
+     * - `body`: Message content. Text whose first non-whitespace char is `{`
+     * or `[` and that parses as JSON travels as that object or array; any
+     * other text travels as a JSON string
      * - `from`: Should match the `from` parameter
      * - `to`: Should contain the `to` parameter
      * * `from` - Sender's DID (must have keys in storage)
@@ -1063,7 +1067,9 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * A `DIDCommMessage` containing:
      * - `id`: Message identifier
      * - `msg_type`: Protocol message type
-     * - `body`: Message body (as JSON string)
+     * - `body`: Message body text. A JSON-string body comes back verbatim as
+     * plain text; an object, array, number, bool or null body comes back as
+     * its compact JSON text (see `ffi::conversions` for the body rule)
      * - `from`: Sender DID (if authenticated)
      * - `to`: List of recipient DIDs
      * - `authenticated`, `encrypted_from_kid`, `sign_from`, `anonymous_sender`:
@@ -1088,11 +1094,25 @@ public protocol DidComInterfaceProtocol : AnyObject {
      *
      * # Errors
      *
-     * Returns `DidCommError::UnpackingError` if:
-     * - Message is malformed or corrupted
-     * - Decryption fails (wrong recipient)
-     * - Signature verification fails
-     * - Required keys are not found in storage
+     * - `DidCommError::UnpackingError` when the frame itself can never be
+     * unpacked, so a redelivery fails the same way: it is not a well-formed
+     * JWE/JWS/JWM, has a wrong signature or an illegal argument, is addressed
+     * to keys this store does not hold, or uses unsupported or incompatible
+     * crypto. A consumer can acknowledge such a frame to the mediator.
+     * - `DidCommError::DatabaseError` when the store, I/O or DID resolution
+     * failed; a later attempt can succeed, so leave the frame for redelivery.
+     * navia-didcomm 1.3.0 also reports some faults of the frame itself this
+     * way, because it gives them `InvalidState`: truncated JSON in the
+     * envelope or protected header (an empty frame included), since
+     * serde_json's `Eof` maps to `InvalidState`; a wrong skid; an
+     * anoncrypt/authcrypt recipient mismatch; a JWS signature kid that does
+     * not match. It gives a sender kid missing from its DID document
+     * `DIDUrlNotFound`. Those fail the same way on every redelivery, so a
+     * consumer should cap redeliveries per frame (the stored payload with the
+     * mediator's `delivery_id` left out, since the mediator mints a new
+     * `delivery_id` for every delivery).
+     * - `DidCommError::GeneralError` when the interface is not open or the
+     * runtime task fails.
      *
      * # Example
      *
@@ -1777,7 +1797,9 @@ open func `open`(path: String, seed: Data)async throws  {
      * * `msg` - The message to encrypt, containing:
      * - `id`: Unique message identifier
      * - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-     * - `body`: Message content as JSON string
+     * - `body`: Message content. Text whose first non-whitespace char is `{`
+     * or `[` and that parses as JSON travels as that object or array; any
+     * other text travels as a JSON string
      * - `from`: Should match the `from` parameter
      * - `to`: Should contain the `to` parameter
      * * `from` - Sender's DID (must have keys in storage)
@@ -1852,7 +1874,9 @@ open func pack(msg: DidCommMessage, from: String, to: [String])async throws  -> 
      * * `msg` - The message to encrypt, containing:
      * - `id`: Unique message identifier
      * - `msg_type`: Protocol identifier (e.g., "https://example.org/protocols/1.0/message")
-     * - `body`: Message content as JSON string
+     * - `body`: Message content. Text whose first non-whitespace char is `{`
+     * or `[` and that parses as JSON travels as that object or array; any
+     * other text travels as a JSON string
      * - `from`: Should match the `from` parameter
      * - `to`: Should contain the `to` parameter
      * * `from` - Sender's DID (must have keys in storage)
@@ -1990,7 +2014,9 @@ open func setErrorLoggingEnabled(enabled: Bool)throws  {try rustCallWithError(Ff
      * A `DIDCommMessage` containing:
      * - `id`: Message identifier
      * - `msg_type`: Protocol message type
-     * - `body`: Message body (as JSON string)
+     * - `body`: Message body text. A JSON-string body comes back verbatim as
+     * plain text; an object, array, number, bool or null body comes back as
+     * its compact JSON text (see `ffi::conversions` for the body rule)
      * - `from`: Sender DID (if authenticated)
      * - `to`: List of recipient DIDs
      * - `authenticated`, `encrypted_from_kid`, `sign_from`, `anonymous_sender`:
@@ -2015,11 +2041,25 @@ open func setErrorLoggingEnabled(enabled: Bool)throws  {try rustCallWithError(Ff
      *
      * # Errors
      *
-     * Returns `DidCommError::UnpackingError` if:
-     * - Message is malformed or corrupted
-     * - Decryption fails (wrong recipient)
-     * - Signature verification fails
-     * - Required keys are not found in storage
+     * - `DidCommError::UnpackingError` when the frame itself can never be
+     * unpacked, so a redelivery fails the same way: it is not a well-formed
+     * JWE/JWS/JWM, has a wrong signature or an illegal argument, is addressed
+     * to keys this store does not hold, or uses unsupported or incompatible
+     * crypto. A consumer can acknowledge such a frame to the mediator.
+     * - `DidCommError::DatabaseError` when the store, I/O or DID resolution
+     * failed; a later attempt can succeed, so leave the frame for redelivery.
+     * navia-didcomm 1.3.0 also reports some faults of the frame itself this
+     * way, because it gives them `InvalidState`: truncated JSON in the
+     * envelope or protected header (an empty frame included), since
+     * serde_json's `Eof` maps to `InvalidState`; a wrong skid; an
+     * anoncrypt/authcrypt recipient mismatch; a JWS signature kid that does
+     * not match. It gives a sender kid missing from its DID document
+     * `DIDUrlNotFound`. Those fail the same way on every redelivery, so a
+     * consumer should cap redeliveries per frame (the stored payload with the
+     * mediator's `delivery_id` left out, since the mediator mints a new
+     * `delivery_id` for every delivery).
+     * - `DidCommError::GeneralError` when the interface is not open or the
+     * runtime task fails.
      *
      * # Example
      *
@@ -2165,7 +2205,10 @@ public func FfiConverterTypeDidComInterface_lower(_ value: DidComInterface) -> U
  * * `id` - Unique message identifier. Should be a UUID or similar unique string.
  * * `msg_type` - Message type URI indicating the protocol and message type
  * (e.g., "https://didcomm.org/basicmessage/2.0/message")
- * * `body` - Message body as a JSON string. The structure depends on the protocol.
+ * * `body` - Message body text: JSON text for an object/array body, plain text
+ * for a string body. `unpack` returns a string body verbatim, so plain text
+ * round-trips unchanged. The structure depends on the protocol; the full
+ * body rule lives in `ffi::conversions`.
  * * `from` - Optional sender DID. Required for authenticated messages.
  * * `to` - List of recipient DIDs. Must contain at least one recipient for packing.
  *
@@ -2254,7 +2297,7 @@ public struct DidCommMessage {
      */
     public var msgType: String
     /**
-     * Message body as JSON string
+     * Message body: JSON text for an object/array body, plain text for a string body
      */
     public var body: String
     /**
@@ -2300,7 +2343,7 @@ public struct DidCommMessage {
          * Protocol message type URI
          */msgType: String, 
         /**
-         * Message body as JSON string
+         * Message body: JSON text for an object/array body, plain text for a string body
          */body: String, 
         /**
          * Sender DID (optional for anonymous messages). On an unpacked message,
@@ -2898,10 +2941,10 @@ private var initializationResult: InitializationResult = {
     if (uniffi_navia_core_checksum_method_didcominterface_open() != 17969) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_method_didcominterface_pack() != 14758) {
+    if (uniffi_navia_core_checksum_method_didcominterface_pack() != 52061) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_method_didcominterface_pack_no_forward() != 54410) {
+    if (uniffi_navia_core_checksum_method_didcominterface_pack_no_forward() != 50488) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_navia_core_checksum_method_didcominterface_remove() != 23360) {
@@ -2910,7 +2953,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_navia_core_checksum_method_didcominterface_set_error_logging_enabled() != 27864) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_method_didcominterface_unpack() != 10840) {
+    if (uniffi_navia_core_checksum_method_didcominterface_unpack() != 28216) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_navia_core_checksum_method_didcominterface_update() != 38998) {

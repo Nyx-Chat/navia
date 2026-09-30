@@ -138,10 +138,16 @@ pub enum UnpackFailure {
 
 /// Classifies a failed `DidcommMessaging::unpack_message`.
 ///
-/// The outer navia-messaging kind is read first. On the pinned v1.1.1 it is
-/// always `InvalidState` for an unpack, because `DidcommMessaging::unpack` wraps
-/// whatever navia-didcomm's `Message::unpack` returned in that kind, so the kind
-/// that decides is navia-didcomm's, inside it. navia-core depends on the same
+/// The outer navia-messaging kind is read first. On the pinned v1.1.2 it is
+/// navia-didcomm's kind, passed through 1:1 for the nine kinds both crates name.
+/// A failed key store is `IoError`: navia-messaging's secrets resolver reports
+/// it that way and navia-didcomm never raises `IoError` itself, so it stays
+/// transient. `InvalidState` is navia-didcomm's own `InvalidState` or one of the
+/// navia-didcomm kinds navia-messaging has no name for.
+///
+/// v1.1.1 wrapped every unpack failure in `InvalidState` (a failed key store
+/// included, labelled `InvalidState` inside too), so the `InvalidState` arm still
+/// reads the navia-didcomm kind underneath. navia-core depends on the same
 /// navia-didcomm as navia-messaging (one entry in `Cargo.lock`), so that error is
 /// read by type through `anyhow::Error::downcast_ref` rather than from its
 /// `Debug` rendering, which nyx-org-gateway has to parse because it has no direct
@@ -173,7 +179,11 @@ pub fn classify_unpack_failure(err: &navia_messaging::error::Error) -> UnpackFai
     }
 }
 
-/// Classifies the navia-didcomm kind that navia-messaging wrapped in `InvalidState`.
+/// Classifies the navia-didcomm kind inside a navia-messaging `InvalidState`.
+///
+/// On v1.1.2 the kinds that reach this function are navia-didcomm's
+/// `InvalidState` and the kinds navia-messaging folds into it, all transient; the
+/// permanent arms serve the v1.1.1 shape, which wrapped every kind.
 ///
 /// The same split as nyx-org-gateway's `PERMANENT_UNPACK_KINDS`. `IoError`,
 /// `InvalidState`, the DID resolution kinds, and the kinds the pinned
@@ -243,10 +253,89 @@ mod tests {
     use navia_didcomm::error::{Error as DidcommError, ErrorKind as DidcommKind};
     use navia_messaging::error::{Error as MessagingError, ErrorKind as MessagingKind};
 
-    /// The exact shape `DidcommMessaging::unpack` returns: navia-didcomm's error
-    /// wrapped in navia-messaging's `InvalidState`.
+    /// The shape navia-messaging v1.1.1's `DidcommMessaging::unpack` returned:
+    /// navia-didcomm's error wrapped in navia-messaging's `InvalidState`.
     fn wrapped(kind: DidcommKind) -> MessagingError {
         MessagingError::new(MessagingKind::InvalidState, DidcommError::msg(kind, "test"))
+    }
+
+    /// The shape the pinned v1.1.2's `DidcommMessaging::unpack` returns:
+    /// navia-didcomm's error converted with `From`, which carries its kind over
+    /// (1:1, or `InvalidState` for a kind navia-messaging has no name for).
+    fn passed_through(kind: DidcommKind) -> MessagingError {
+        MessagingError::from(DidcommError::msg(kind, "test"))
+    }
+
+    /// What v1.1.2 returns when the key store fails during an unpack:
+    /// `AskarSecretsResolver` wraps the store's error in a navia-didcomm
+    /// `IoError`, navia-didcomm passes it up unchanged, and
+    /// `DidcommMessaging::unpack` converts it with `From`.
+    fn failed_key_store() -> MessagingError {
+        let store = MessagingError::msg(MessagingKind::InvalidState, "pool closed");
+        MessagingError::from(DidcommError::new(DidcommKind::IoError, store))
+    }
+
+    #[test]
+    fn a_failed_key_store_is_io_error_and_surfaces_as_database_error() {
+        assert_eq!(failed_key_store().kind(), MessagingKind::IoError);
+        assert_eq!(
+            classify_unpack_failure(&failed_key_store()),
+            UnpackFailure::Transient
+        );
+        assert!(
+            is_database(failed_key_store()),
+            "a key store failure must not surface as UnpackingError"
+        );
+    }
+
+    #[test]
+    fn every_navia_didcomm_kind_as_v1_1_2_reports_it() {
+        let permanent = [
+            DidcommKind::Malformed,
+            DidcommKind::SecretNotFound,
+            DidcommKind::NoCompatibleCrypto,
+            DidcommKind::Unsupported,
+            DidcommKind::IllegalArgument,
+        ];
+        for kind in permanent {
+            assert!(
+                is_unpacking(passed_through(kind)),
+                "{kind:?} should surface as UnpackingError"
+            );
+        }
+
+        // Every other navia-didcomm kind. The first four keep their name in
+        // navia-messaging; the rest fold into its `InvalidState`.
+        let transient = [
+            DidcommKind::IoError,
+            DidcommKind::InvalidState,
+            DidcommKind::DIDNotResolved,
+            DidcommKind::DIDUrlNotFound,
+            DidcommKind::DIDDocumentInvalid,
+            DidcommKind::InvalidKeyMaterial,
+            DidcommKind::KeyDerivationFailed,
+            DidcommKind::EncryptionFailed,
+            DidcommKind::DecryptionFailed,
+            DidcommKind::SignatureVerificationFailed,
+            DidcommKind::SignatureCreationFailed,
+            DidcommKind::ProtocolViolation,
+            DidcommKind::UnsupportedFormat,
+            DidcommKind::MissingRequiredField,
+            DidcommKind::CryptoOperationFailed,
+            DidcommKind::Timeout,
+            DidcommKind::ResourceExhausted,
+        ];
+        for kind in transient {
+            assert_eq!(
+                classify_unpack_failure(&passed_through(kind)),
+                UnpackFailure::Transient,
+                "{kind:?}"
+            );
+            assert!(
+                is_database(passed_through(kind)),
+                "{kind:?} should surface as DatabaseError"
+            );
+        }
     }
 
     fn is_unpacking(err: MessagingError) -> bool {

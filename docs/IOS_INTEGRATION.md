@@ -4,7 +4,16 @@ This guide covers how to integrate Navia into your iOS application.
 
 ## Installation
 
-### CocoaPods (Recommended)
+Navia reaches iOS in two ways today: the CocoaPods podspec in this repository
+(`Navia.podspec`), or the XCFramework attached to each GitHub release. There is
+no Swift Package Manager package (the repository has no `Package.swift`).
+
+CI builds the framework and runs its tests on the machine that built it, but
+nothing in CI installs the pod or links an app against the released
+XCFramework. Both paths have known problems, described under each one below;
+check them before you rely on either.
+
+### CocoaPods
 
 Add to your `Podfile`:
 
@@ -17,22 +26,53 @@ Then run:
 pod install
 ```
 
-### Swift Package Manager
+The pod builds the Rust library from source: its script phase runs
+`scripts/build-for-ios.sh --release --package` before Swift compiles. The machine
+that builds your app needs:
 
-Add to your `Package.swift`:
+- Xcode with the iOS SDKs (the script calls `xcrun --sdk iphoneos` and
+  `xcrun --sdk iphonesimulator`; the command-line tools alone do not have them)
+- `rustup` with the stable and nightly toolchains, and network access: the
+  script runs `rustup target add` for both, then builds and runs
+  `uniffi-bindgen` with `cargo +nightly`
+- Read access to the private `Nyx-Chat/navia-didcomm` and
+  `Nyx-Chat/navia-messaging` repositories, with git credentials cargo can use
+  (for example `net.git-fetch-with-cli = true` in `~/.cargo/config.toml`), since
+  cargo fetches both from GitHub
 
-```swift
-dependencies: [
-    .package(url: "https://github.com/Nyx-Chat/navia.git", .exact("1.4.0"))
-]
-```
+**Known problem: the pod does not link today.** Inside Xcode the script builds
+only the target for the current SDK, and that path never creates
+`rust/target/universal/<mode>`, the only directories the podspec's
+`LIBRARY_SEARCH_PATHS` name. The crate also builds only a dynamic library
+(`crate-type = ["cdylib", "lib"]`, no `staticlib`) that nothing embeds, and
+`-lnavia_core` is set only on the pod target, not on the app. Expect
+`ld: library 'navia_core' not found`, or undefined `uniffi_navia_core_*` symbols
+when the app links. The podspec needs fixing before this path works.
 
-### Manual Installation
+### XCFramework from the GitHub release (Manual)
 
-1. Download the `Navia.xcframework` from the latest [GitHub release](https://github.com/Nyx-Chat/navia/releases)
-2. Drag and drop it into your Xcode project
+Each release attaches `Navia.xcframework-<version>.zip` to its
+[GitHub release](https://github.com/Nyx-Chat/navia/releases). It holds an
+`arm64` device slice and an `arm64` simulator slice (Apple Silicon simulators
+only).
+
+1. Download `Navia.xcframework-<version>.zip` from the release you want and unzip it
+2. Drag `Navia.xcframework` into your Xcode project
 3. Ensure it's added to "Frameworks, Libraries, and Embedded Content"
 4. Set "Embed" to "Embed & Sign"
+
+**Check before you ship: the framework may fail to load at launch.**
+`Navia.framework` links `libnavia_core.dylib`, no build phase embeds that dylib,
+and rustc gives it its absolute build path as its install name. Run:
+
+```bash
+otool -L Navia.xcframework/ios-arm64/Navia.framework/Navia
+```
+
+If a `libnavia_core.dylib` entry points at a build machine path (for example
+under `/Users/runner/work/`), an app that embeds the framework stops at launch
+with dyld's `Library not loaded`. In that case this release's XCFramework cannot
+be used as is.
 
 ## Basic Usage
 

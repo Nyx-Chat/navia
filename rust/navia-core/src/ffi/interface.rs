@@ -341,7 +341,9 @@ impl DidComInterface {
     ///   anoncrypt/authcrypt recipient mismatch; a JWS signature kid that does
     ///   not match. It gives a sender kid missing from its DID document
     ///   `DIDUrlNotFound`. Those fail the same way on every redelivery, so a
-    ///   consumer should cap redeliveries per `delivery_id`.
+    ///   consumer should cap redeliveries per frame (the stored payload with the
+    ///   mediator's `delivery_id` left out, since the mediator mints a new
+    ///   `delivery_id` for every delivery).
     /// - `DidCommError::GeneralError` when the interface is not open or the
     ///   runtime task fails.
     ///
@@ -1263,5 +1265,184 @@ impl DidComInterface {
             .map_err(|e| DidCommError::GeneralError {
                 message: e.to_string(),
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! `unpack` against a real navia-messaging store whose key store fails.
+    //!
+    //! The consumer acknowledges a frame on `UnpackingError` and leaves it for
+    //! redelivery on `DatabaseError`, so a failed key store must never surface as
+    //! `UnpackingError`. These tests drive the FFI `unpack` over a SQLite store
+    //! the test can close, through both of its branches (off a Tokio runtime and
+    //! inside one), and check the navia-messaging kind underneath too.
+
+    use super::DidComInterface;
+    use crate::ffi::types::{DIDCommMessage, DidCommError};
+    use affinidi_did_resolver_cache_sdk::{config::DIDCacheConfigBuilder, DIDCacheClient};
+    use askar_storage::any::{into_any_backend, AnyBackend};
+    use askar_storage::sqlite::SqliteStoreOptions;
+    use askar_storage::{generate_raw_store_key, Backend, StoreKeyMethod};
+    use futures::executor::block_on;
+    use navia_didcomm::Message as WireMessage;
+    use navia_messaging::askardb::AskarDB;
+    use navia_messaging::error::ErrorKind;
+    use navia_messaging::messaging::DidcommMessaging;
+    use serde_json::json;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    const MSG_TYPE: &str = "https://didcomm.org/basicmessage/2.0/message";
+    const ENDPOINT: &str = "https://example.com/didcomm";
+
+    /// A navia-messaging store on a fresh SQLite file, built on the interface's
+    /// runtime, with a handle on its backend so a test can close it.
+    fn store(
+        interface: &DidComInterface,
+        dir: &TempDir,
+        seed: u8,
+    ) -> (Arc<DidcommMessaging>, AnyBackend) {
+        let path = dir.path().join(format!("store-{seed}.db"));
+        let path = path.to_string_lossy().to_string();
+        interface.runtime.block_on(async move {
+            let key = generate_raw_store_key(Some(&[seed; 32])).expect("store key");
+            let backend = into_any_backend(
+                SqliteStoreOptions::from_path(&path)
+                    .provision(StoreKeyMethod::RawKey, key, None, false)
+                    .await
+                    .expect("provision the store"),
+            );
+            let resolver = DIDCacheClient::new(DIDCacheConfigBuilder::default().build())
+                .await
+                .expect("DID resolver");
+            let messaging = Arc::new(DidcommMessaging::new(
+                Arc::new(AskarDB::new(backend.clone())),
+                resolver,
+            ));
+            (messaging, backend)
+        })
+    }
+
+    /// An authcrypted, signed frame from `from` to `to`, packed by `messaging`.
+    fn frame(
+        interface: &DidComInterface,
+        messaging: &DidcommMessaging,
+        from: &str,
+        to: &str,
+    ) -> String {
+        let msg = WireMessage::build("frame-1".into(), MSG_TYPE.into(), json!({"content": "hi"}))
+            .from(from.into())
+            .to(to.into())
+            .finalize();
+        interface
+            .runtime
+            .block_on(messaging.pack_message_no_forward(&msg, &[to], from))
+            .expect("pack the frame")
+            .0
+    }
+
+    /// The navia-messaging kind a raw unpack of `frame` fails with.
+    fn raw_kind(
+        interface: &DidComInterface,
+        messaging: &DidcommMessaging,
+        frame: &str,
+    ) -> ErrorKind {
+        interface
+            .runtime
+            .block_on(messaging.unpack_message(frame))
+            .expect_err("the raw unpack should fail")
+            .kind()
+    }
+
+    #[test]
+    fn a_failed_key_store_is_a_database_error_and_a_bad_frame_an_unpacking_error() {
+        let interface = DidComInterface::new(String::new(), "did:peer:mediator".to_string());
+        let dir = TempDir::new().expect("temp dir");
+
+        // `ours` backs the interface; `theirs` is the peer's store.
+        let (ours, backend) = store(&interface, &dir, 1);
+        let (theirs, _their_backend) = store(&interface, &dir, 2);
+        let (me, peer) = interface.runtime.block_on(async {
+            (
+                ours.generate_did(ENDPOINT.into(), vec![])
+                    .await
+                    .expect("my DID"),
+                theirs
+                    .generate_did(ENDPOINT.into(), vec![])
+                    .await
+                    .expect("peer DID"),
+            )
+        });
+        interface
+            .didcomm_messaging
+            .write()
+            .expect("messaging lock")
+            .replace(ours.clone());
+
+        let for_me = frame(&interface, &theirs, &peer, &me);
+        let for_peer = frame(&interface, &ours, &me, &peer);
+
+        // With the store healthy, the frame for me unpacks.
+        for (branch, result) in unpack_both_ways(&interface, &for_me) {
+            let unpacked = result.unwrap_or_else(|e| panic!("{branch}: unpack for me: {e:?}"));
+            assert_eq!(unpacked.from.as_deref(), Some(peer.as_str()), "{branch}");
+        }
+
+        // Faults of the frame itself are permanent: UnpackingError.
+        assert_eq!(
+            raw_kind(&interface, &ours, &for_peer),
+            ErrorKind::SecretNotFound
+        );
+        assert_eq!(raw_kind(&interface, &ours, "{}"), ErrorKind::Malformed);
+        for bad in [for_peer.as_str(), "{}"] {
+            for (branch, result) in unpack_both_ways(&interface, bad) {
+                assert!(
+                    matches!(result, Err(DidCommError::UnpackingError { .. })),
+                    "{branch}: a frame that can never be unpacked is UnpackingError, got {result:?}"
+                );
+            }
+        }
+
+        // Close the key store: the same good frame now fails on the secret lookup.
+        interface
+            .runtime
+            .block_on(backend.close())
+            .expect("close the store");
+
+        assert_eq!(
+            raw_kind(&interface, &ours, &for_me),
+            ErrorKind::IoError,
+            "navia-messaging 1.1.2 reports a failed key store as IoError"
+        );
+        for (branch, result) in unpack_both_ways(&interface, &for_me) {
+            assert!(
+                matches!(result, Err(DidCommError::DatabaseError { .. })),
+                "{branch}: a failed key store must surface as DatabaseError, got {result:?}"
+            );
+        }
+    }
+
+    /// `unpack` of `frame` through each of its two branches, labelled.
+    ///
+    /// Off any Tokio runtime (`futures::executor::block_on`) it takes the spawn
+    /// branch, the one Kotlin and Swift callers reach; inside the interface's
+    /// runtime it takes the `Handle::try_current` branch and awaits in place.
+    fn unpack_both_ways(
+        interface: &DidComInterface,
+        frame: &str,
+    ) -> [(&'static str, Result<DIDCommMessage, DidCommError>); 2] {
+        [
+            (
+                "spawn branch",
+                block_on(interface.unpack(frame.to_string())),
+            ),
+            (
+                "in-runtime branch",
+                interface
+                    .runtime
+                    .block_on(interface.unpack(frame.to_string())),
+            ),
+        ]
     }
 }
