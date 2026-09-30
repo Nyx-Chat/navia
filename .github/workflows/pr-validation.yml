@@ -253,6 +253,23 @@ jobs:
           echo "Running NaviaTests on $SIMULATOR_NAME ($SIMULATOR_ID)"
           xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" test
 
+      # The Navia target's "Build Rust Library" script phase runs
+      # scripts/build-for-ios.sh --package, which regenerated ios/Navia/Generated
+      # from this commit's Rust source while the tests built. The committed copy
+      # has to match it: stale bindings fail at the first FFI call with "UniFFI
+      # API checksum mismatch", and a doc-only edit on an export is enough to
+      # move its checksum.
+      - name: Check the committed Swift bindings are current
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all -- ios/Navia/Generated)" ]; then
+            echo "::error title=Stale Swift bindings::ios/Navia/Generated differs from the bindings this build generated from the Rust source. Regenerate them (scripts/build-for-ios.sh --package) and commit ios/Navia/Generated with the Rust change. The changes follow."
+            git status --short --untracked-files=all -- ios/Navia/Generated
+            git --no-pager diff --stat -- ios/Navia/Generated
+            git --no-pager diff -- ios/Navia/Generated | head -n 200 || true
+            exit 1
+          fi
+          echo "ios/Navia/Generated matches the bindings generated from the Rust source"
+
   # Android build - run in parallel with iOS build using matrix strategy
   android-build:
     name: Android Build (${{ matrix.arch }})

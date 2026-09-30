@@ -189,17 +189,19 @@ pub fn classify_unpack_failure(err: &navia_messaging::error::Error) -> UnpackFai
 /// `InvalidState`, the DID resolution kinds, and the kinds the pinned
 /// navia-didcomm declares but its unpack path never returns all stay transient.
 ///
-/// An inner `InvalidState` is a store failure behind the secrets resolver or a
-/// failed DID resolution, but navia-didcomm 1.3.0 also gives it to some faults
-/// of the frame itself: truncated JSON in the envelope or protected header (an
-/// empty frame included), because serde_json's `Eof` maps to `InvalidState`; a
-/// wrong skid; an anoncrypt/authcrypt recipient mismatch; a JWS signature kid
-/// that does not match. It gives a sender kid missing from its DID document
-/// `DIDUrlNotFound`. The kind alone cannot tell those apart from a store or
-/// resolution failure, so they stay transient here too and fail the same way on
-/// every redelivery; a consumer has to cap redeliveries per frame (the stored
-/// payload with the mediator's `delivery_id` left out, since the mediator mints a
-/// new `delivery_id` for every delivery).
+/// Under v1.1.1 an inner `InvalidState` is also a store failure behind the
+/// secrets resolver or a failed DID resolution. v1.1.2 reports those as
+/// `IoError` and `DIDNotResolved`, which `classify_unpack_failure` keeps
+/// transient before this function is reached. Under both, navia-didcomm 1.3.0
+/// gives `InvalidState` to some faults of the frame itself: truncated JSON in the
+/// envelope or protected header (an empty frame included), because serde_json's
+/// `Eof` maps to `InvalidState`; a wrong skid; an anoncrypt/authcrypt recipient
+/// mismatch; a JWS signature kid that does not match. It gives a sender kid
+/// missing from its DID document `DIDUrlNotFound`. The kind alone cannot tell
+/// those apart from a transient failure, so they stay transient here too and fail
+/// the same way on every redelivery; a consumer has to cap redeliveries per frame
+/// (the stored payload with the mediator's `delivery_id` left out, since the
+/// mediator mints a new `delivery_id` for every delivery).
 fn classify_didcomm_kind(kind: navia_didcomm::error::ErrorKind) -> UnpackFailure {
     use navia_didcomm::error::ErrorKind;
 

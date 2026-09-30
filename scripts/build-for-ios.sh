@@ -257,9 +257,13 @@ fi
 echo -e "${YELLOW}Generating Swift bindings...${NC}"
 cd "$RUST_DIR/navia-core"
 
+# --no-format: uniffi-bindgen otherwise runs swiftformat when the machine has it,
+# so the output would depend on the machine. The committed ios/Navia/Generated is
+# unformatted, and CI fails when the build's output differs from it.
 cargo +nightly run --features cli --bin uniffi-bindgen generate \
     --library "../$FINAL_LIB" \
     --language swift \
+    --no-format \
     --out-dir "$OUTPUT_DIR"
 
 # Move the generated files to the expected locations

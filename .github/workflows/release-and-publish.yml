@@ -14,8 +14,10 @@ jobs:
       contents: write
       packages: write
       actions: read
+      pull-requests: read
     outputs:
       tag_created: ${{ steps.check_tag.outputs.EXISTS == 'false' }}
+      validation_run_id: ${{ steps.validation_run.outputs.RUN_ID }}
     steps:
       - name: Free up disk space
         run: |
@@ -65,16 +67,76 @@ jobs:
             echo "✅ Tag ${{ steps.get_version.outputs.VERSION }} does not exist - proceeding with release"
           fi
 
+      # The binaries this release publishes are the ones PR Validation built for
+      # the pull request that produced this push, never those of whichever
+      # validation run finished last: another PR validated after this one would
+      # otherwise ship its code under this version. This runs before the tag is
+      # pushed, and checks the iOS artifact too, so a miss fails the release
+      # before anything is published.
+      - name: Find the release PR's validation run
+        if: steps.check_tag.outputs.EXISTS == 'false'
+        id: validation_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          fail() {
+            echo "::error title=No PR Validation artifacts for this release::$1"
+            exit 1
+          }
+          for tool in gh jq; do
+            command -v "$tool" >/dev/null || fail "$tool is not installed on this runner."
+          done
+
+          # The merged PR whose merge commit is this push's head (merge, squash
+          # and rebase merges all set merge_commit_sha to it).
+          PULLS=$(gh api "repos/$REPO/commits/$RELEASE_SHA/pulls") \
+            || fail "Could not list the pull requests of $RELEASE_SHA."
+          PR=$(jq -r --arg sha "$RELEASE_SHA" '
+            [ .[] | select(.merged_at != null and .merge_commit_sha == $sha) ]
+            | if length == 1 then "\(.[0].number) \(.[0].head.sha)" else empty end' <<< "$PULLS")
+          if [ -z "$PR" ]; then
+            fail "$RELEASE_SHA is not the merge commit of exactly one merged pull request, so no PR Validation run built its binaries. Merge the release commit to main through a pull request whose PR Validation run passed."
+          fi
+          PR_NUMBER=${PR%% *}
+          PR_HEAD_SHA=${PR#* }
+          echo "Release commit $RELEASE_SHA comes from PR #$PR_NUMBER (head $PR_HEAD_SHA)"
+
+          # Successful PR Validation runs for that head, newest first; take the
+          # first that still holds every artifact this workflow downloads.
+          RUNS=$(gh api -X GET "repos/$REPO/actions/workflows/pr-validation.yml/runs" \
+            -f head_sha="$PR_HEAD_SHA" -f event=pull_request -f status=success -f per_page=100) \
+            || fail "Could not list the PR Validation runs of PR #$PR_NUMBER."
+          RUN_ID=""
+          for id in $(jq -r '.workflow_runs | sort_by(.created_at) | reverse | .[].id' <<< "$RUNS"); do
+            ARTIFACTS=$(gh api "repos/$REPO/actions/runs/$id/artifacts?per_page=100") \
+              || fail "Could not list the artifacts of PR Validation run $id."
+            if jq -e '
+              [ .artifacts[] | select(.expired == false) | .name ] as $names
+              | all("android-lib-arm64-v8a", "android-lib-x86_64", "ios-build-artifacts";
+                    . as $want | any($names[]; . == $want))' <<< "$ARTIFACTS" >/dev/null; then
+              RUN_ID=$id
+              break
+            fi
+            echo "PR Validation run $id lacks an unexpired android-lib-arm64-v8a, android-lib-x86_64 or ios-build-artifacts artifact"
+          done
+          if [ -z "$RUN_ID" ]; then
+            fail "PR #$PR_NUMBER has no successful PR Validation run for its head $PR_HEAD_SHA that still holds android-lib-arm64-v8a, android-lib-x86_64 and ios-build-artifacts (they are kept 7 days). Re-run all jobs of that PR's PR Validation run from the Actions tab, wait for it to pass, then re-run this workflow. No tag was pushed and nothing was published."
+          fi
+          echo "Using PR Validation run $RUN_ID: https://github.com/$REPO/actions/runs/$RUN_ID"
+          echo "RUN_ID=$RUN_ID" >> "$GITHUB_OUTPUT"
+
       - name: Download Android artifacts from PR validation
         if: steps.check_tag.outputs.EXISTS == 'false'
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: pr-validation.yml
-          workflow_conclusion: success
+          run_id: ${{ steps.validation_run.outputs.RUN_ID }}
           name: android-lib-.*
           name_is_regexp: true
           path: ./android-artifacts/
-          search_artifacts: true
+          if_no_artifact_found: fail
 
       - name: Setup Android Environment
         if: steps.check_tag.outputs.EXISTS == 'false'
@@ -160,10 +222,15 @@ jobs:
             ### Installation
             
             #### Android
-            Published to GitHub Packages (`https://maven.pkg.github.com/Nyx-Chat/navia`). Add to your module's `build.gradle.kts`:
+            Add to your module's `build.gradle.kts`:
             ```kotlin
-            implementation("com.nyx:navia:${{ steps.get_version.outputs.RAW_VERSION }}")
+            dependencies {
+                implementation("com.nyx:navia:${{ steps.get_version.outputs.RAW_VERSION }}")
+                implementation("net.java.dev.jna:jna:5.17.0@aar")
+            }
             ```
+
+            Navia is published to GitHub Packages, so your Gradle repositories need `https://maven.pkg.github.com/Nyx-Chat/navia` with a GitHub user and a token that has the `read:packages` scope (see [Troubleshooting](https://github.com/Nyx-Chat/navia/blob/${{ steps.get_version.outputs.VERSION }}/docs/TROUBLESHOOTING.md#failed-to-resolve-comnyxnaviaxxx)).
             
             #### iOS
             
@@ -227,15 +294,17 @@ jobs:
           echo "RAW_VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected version: v$VERSION"
 
+      # The same PR Validation run the Android binaries came from; the
+      # release-and-publish job picked it and checked this artifact exists.
       - name: Download iOS artifacts from PR validation
         if: needs.release-and-publish.outputs.tag_created == 'true'
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: pr-validation.yml
-          workflow_conclusion: success
+          run_id: ${{ needs.release-and-publish.outputs.validation_run_id }}
           name: ios-build-artifacts
           path: ./ios-artifacts/
-          search_artifacts: true
+          if_no_artifact_found: fail
 
       - name: Setup iOS artifacts
         if: needs.release-and-publish.outputs.tag_created == 'true'

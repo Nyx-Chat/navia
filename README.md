@@ -35,6 +35,11 @@ dependencies {
 }
 ```
 
+Navia is published to GitHub Packages, so your Gradle repositories need
+`https://maven.pkg.github.com/Nyx-Chat/navia` with a GitHub user and a token
+that has the `read:packages` scope (see
+[Troubleshooting](docs/TROUBLESHOOTING.md#failed-to-resolve-comnyxnaviaxxx)).
+
 #### iOS
 
 Add to your `Podfile`:
@@ -242,6 +247,7 @@ The project uses GitHub Actions with three main workflows:
 3. **Release and Publish** (`release-and-publish.yml`): Automated releases
    - Triggers on a push to `main` that changes `rust/navia-core/Cargo.toml`
    - Tags `v<version>` itself, and skips the release when that tag already exists
+   - Takes the binaries from the release PR's own PR Validation run
    - Publishes the AAR to GitHub Packages
    - Creates the GitHub release and attaches `Navia.xcframework-<version>.zip`
 
@@ -252,17 +258,28 @@ Bump every version in one release commit:
 1. `rust/navia-core/Cargo.toml` `version`, and the `navia-core` entry in `rust/Cargo.lock`
 2. `android/gradle.properties` `VERSION_NAME`
 3. `Navia.podspec` `spec.version`
-4. `ios/Navia.xcodeproj/project.pbxproj` `MARKETING_VERSION`, in all four build
-   configurations (Navia and NaviaTests, Debug and Release). Nothing derives it
-   from `Cargo.toml`, so it stays behind unless it is bumped here (it still read
-   `1.0` at 1.4.0).
+4. `ios/Navia.xcodeproj/project.pbxproj` `MARKETING_VERSION = <version>`, in all
+   four build configurations (Navia and NaviaTests, Debug and Release). Nothing
+   derives it from `Cargo.toml`, so it stays behind unless it is bumped here.
 5. The install snippets in `README.md`, `ANDROID_INTEGRATION.md`,
    `docs/IOS_INTEGRATION.md` and `docs/TROUBLESHOOTING.md`
 6. `CHANGELOG.md`: the section for the new version
 
-Then merge the commit to `main`. The push that changes `rust/navia-core/Cargo.toml`
-starts the release; do not tag by hand, since the workflow skips a version whose
-tag already exists.
+Then merge the commit to `main` through a pull request. The push that changes
+`rust/navia-core/Cargo.toml` starts the release; do not tag by hand, since the
+workflow skips a version whose tag already exists.
+
+The release does not build the libraries itself. It publishes the Android
+libraries and iOS frameworks that the release PR's own PR Validation run built
+(the successful run for the PR's head commit), never those of another PR. So:
+
+- Merge only after PR Validation passed on the PR's final commit, and within 7
+  days of that run, when its artifacts expire.
+- PR Validation builds the PR merged into `main` as `main` stood when it ran. If
+  `main` has moved since, update the PR branch so validation runs again.
+- When no such run holds the artifacts, the release fails before it tags or
+  publishes anything. Re-run all jobs of the PR's PR Validation run from the
+  Actions tab, then re-run the failed release workflow.
 
 ## Architecture
 
