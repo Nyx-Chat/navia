@@ -29,12 +29,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`Malformed message: Malformed: ...` where 1.1.1 gave `Malformed message:
   Invalid state: ...`), and a store failure reads `Storage operation failed:
   unpack - IO error: ...`.
+- `rust/Cargo.lock` pins navia-didcomm 1.3.1 (the manifest is unchanged).
+  1.3.1 labels the faults of a frame itself by cause, where 1.3.0 gave most of
+  them `InvalidState`, so `DidComInterface.unpack` now throws
+  `DidCommError::UnpackingError` (Kotlin `DidCommException.UnpackingException`,
+  Swift `DidCommError.UnpackingError`) for frames it used to report as
+  `DatabaseError`, and a consumer acknowledges them on the first delivery
+  instead of leaving them for redelivery. Truncated JSON in the frame or its
+  protected header (an empty frame included), an anoncrypt envelope that
+  carries `apu` or is addressed to other keys than the authcrypt inside it, an
+  authcrypt tag longer than 124 bytes, a signature or `from_prior` `alg` that
+  does not match the signer's or issuer's key type, and an authcrypt sender
+  whose DID document carries a Multikey that cannot be decoded surface as
+  `UnpackingError::MalformedMessage` (`Malformed message: Malformed: ...`), as
+  does a recipient secret in this store whose multicodec prefix cannot be read.
+  A recipient key removed from the store while the frame is unpacked surfaces
+  as `UnpackingError::RecipientKeyNotFound` (`No matching recipient key found:
+  ...`). An authcrypt sender whose DID document has a verification method of a
+  type navia-messaging's resolver does not support, and a signer or
+  `from_prior` issuer key of a type navia-didcomm does not support, surface as
+  `UnpackingError::DecryptionFailed` (`Decryption failed: Unsupported crypto
+  or method: ...`). All of these were `DatabaseError`. A sender DID that does
+  not resolve (`DIDNotResolved`) and a sender key its DID document does not
+  list (`DIDUrlNotFound`) stay `DatabaseError`, like a store or I/O failure, so
+  keep the redelivery cap per frame. navia-didcomm still rejects a re-wrapped
+  forward whose outer anoncrypt envelope names other keys than the authcrypt
+  inside it, a genuine one included; such a frame now fails on the first
+  delivery instead of at the cap. `rust/navia-core/tests/error_scenarios.rs`
+  pins truncated JSON, anoncrypt `apu`, the tag limit and the sender-resolution
+  kinds (a sender DID that does not resolve, a sender kid its DID document does
+  not list, a sender key of an unsupported type and one that cannot be
+  decoded) end to end through the FFI; the other relabels rest on
+  navia-didcomm's and navia-messaging's own tests and the kind mapping in
+  `handler.rs`.
 - The `DidComInterface.unpack` doc comment (`interface.rs`) says the redelivery
   cap for a `DatabaseError` is per frame, not per `delivery_id`, as `handler.rs`
-  and `docs/API.md` have since 1.4.0. The doc comment is part of the method's
-  UniFFI checksum, so this doc-only edit moves it (to 28216);
-  Kotlin and Swift bindings must come from the same build as the library they
-  call, or the first FFI call fails with `UniFFI API checksum mismatch`.
+  and `docs/API.md` have since 1.4.0, and describes the navia-didcomm 1.3.1
+  split above: the `UnpackingError` message prefix for each fault of the frame,
+  and what still lands in `DatabaseError` besides a store, I/O or DID
+  resolution failure (`DIDNotResolved`, `DIDUrlNotFound` and navia-didcomm's
+  own `InvalidState`). The doc comment is part of the method's UniFFI checksum,
+  so these doc-only edits move it (to 6160); Kotlin and Swift bindings must
+  come from the same build as the library they call, or the first FFI call
+  fails with `UniFFI API checksum mismatch`.
 - The committed Swift bindings in `ios/Navia/Generated/` are regenerated from
   the source (the 1.4.0 copy carried stale `pack`, `pack_no_forward` and
   `unpack` checksums), and `scripts/build-for-ios.sh` generates them with
@@ -71,8 +108,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged. The `unpack` checksum changes, so a consumer takes the Kotlin or
   Swift bindings and the library from the same AAR / XCFramework, as usual.
 - A consumer that parses `DidCommError` message text sees the new kind prefix
-  described above; one that branches on the exception class (nyx-android does)
-  is unaffected.
+  described above. The navia-messaging 1.1.2 pin changes no exception class.
+- Behaviour change on unpack from the navia-didcomm 1.3.1 pin: the frame faults
+  listed above throw `UnpackingException` / `UnpackingError` where they threw
+  `DatabaseException` / `DatabaseError`, so a consumer that branches on the
+  exception class (nyx-android does) acknowledges them on the first delivery.
+  Keep the redelivery cap for `DatabaseError`: a sender DID that does not
+  resolve and a sender key its DID document does not list still land there.
 
 ## [1.4.0] - 2026-09-29
 
