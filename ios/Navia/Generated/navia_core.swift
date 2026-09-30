@@ -1095,24 +1095,45 @@ public protocol DidComInterfaceProtocol : AnyObject {
      * # Errors
      *
      * - `DidCommError::UnpackingError` when the frame itself can never be
-     * unpacked, so a redelivery fails the same way: it is not a well-formed
-     * JWE/JWS/JWM, has a wrong signature or an illegal argument, is addressed
-     * to keys this store does not hold, or uses unsupported or incompatible
-     * crypto. A consumer can acknowledge such a frame to the mediator.
+     * unpacked, so a redelivery fails the same way and a consumer can
+     * acknowledge the frame to the mediator. Its message names the cause
+     * (see the list after this one).
      * - `DidCommError::DatabaseError` when the store, I/O or DID resolution
      * failed; a later attempt can succeed, so leave the frame for redelivery.
-     * navia-didcomm 1.3.0 also reports some faults of the frame itself this
-     * way, because it gives them `InvalidState`: truncated JSON in the
-     * envelope or protected header (an empty frame included), since
-     * serde_json's `Eof` maps to `InvalidState`; a wrong skid; an
-     * anoncrypt/authcrypt recipient mismatch; a JWS signature kid that does
-     * not match. It gives a sender kid missing from its DID document
-     * `DIDUrlNotFound`. Those fail the same way on every redelivery, so a
-     * consumer should cap redeliveries per frame (the stored payload with the
-     * mediator's `delivery_id` left out, since the mediator mints a new
-     * `delivery_id` for every delivery).
+     * Three other causes land here, because their kind cannot be told apart
+     * from such a failure: a DID the frame names that does not resolve
+     * (`DIDNotResolved`), such as the sender's or signer's; a key the frame
+     * names that its DID document does not list (`DIDUrlNotFound`); and a
+     * navia-didcomm `InvalidState`, which it keeps for its own library
+     * errors. The first two are faults of the frame and fail the same way on
+     * every redelivery, so cap redeliveries per frame (the stored payload with
+     * the mediator's `delivery_id` left out, since the mediator mints a new
+     * `delivery_id` for every delivery) rather than retrying a
+     * `DatabaseError` forever.
      * - `DidCommError::GeneralError` when the interface is not open or the
      * runtime task fails.
+     *
+     * An `UnpackingError` message starts with one of these:
+     *
+     * - `Malformed message: `: not a well-formed JWE/JWS/JWM, or its
+     * encryption or signature does not verify (sender and recipient keys on
+     * different curves included); truncated JSON in the frame or its
+     * protected header (an empty frame included); an anoncrypt envelope that
+     * carries `apu` or is addressed to other keys than the authcrypt inside
+     * it; an authcrypt tag longer than 124 bytes; a signature or
+     * `from_prior` `alg` that does not match the signer's or issuer's key
+     * type; a sender or signer key, or a recipient secret in this store,
+     * that cannot be decoded.
+     * - `No matching recipient key found: `: addressed to keys this store does
+     * not hold, or a recipient key removed while the frame is unpacked.
+     * - `Decryption failed: `: a crypto algorithm or key agreement method this
+     * build does not support, including a sender verification method of a
+     * type the DID resolver does not support and a signer or `from_prior`
+     * issuer key of a type navia-didcomm does not support.
+     * - `Invalid message format: `: an argument navia-didcomm rejects, such as
+     * multibase key material without the `z` prefix or with an unknown or
+     * wrong multicodec prefix.
+     * - `Sender mismatch: `: a forged `from` (see Sender check above).
      *
      * # Example
      *
@@ -2042,24 +2063,45 @@ open func setErrorLoggingEnabled(enabled: Bool)throws  {try rustCallWithError(Ff
      * # Errors
      *
      * - `DidCommError::UnpackingError` when the frame itself can never be
-     * unpacked, so a redelivery fails the same way: it is not a well-formed
-     * JWE/JWS/JWM, has a wrong signature or an illegal argument, is addressed
-     * to keys this store does not hold, or uses unsupported or incompatible
-     * crypto. A consumer can acknowledge such a frame to the mediator.
+     * unpacked, so a redelivery fails the same way and a consumer can
+     * acknowledge the frame to the mediator. Its message names the cause
+     * (see the list after this one).
      * - `DidCommError::DatabaseError` when the store, I/O or DID resolution
      * failed; a later attempt can succeed, so leave the frame for redelivery.
-     * navia-didcomm 1.3.0 also reports some faults of the frame itself this
-     * way, because it gives them `InvalidState`: truncated JSON in the
-     * envelope or protected header (an empty frame included), since
-     * serde_json's `Eof` maps to `InvalidState`; a wrong skid; an
-     * anoncrypt/authcrypt recipient mismatch; a JWS signature kid that does
-     * not match. It gives a sender kid missing from its DID document
-     * `DIDUrlNotFound`. Those fail the same way on every redelivery, so a
-     * consumer should cap redeliveries per frame (the stored payload with the
-     * mediator's `delivery_id` left out, since the mediator mints a new
-     * `delivery_id` for every delivery).
+     * Three other causes land here, because their kind cannot be told apart
+     * from such a failure: a DID the frame names that does not resolve
+     * (`DIDNotResolved`), such as the sender's or signer's; a key the frame
+     * names that its DID document does not list (`DIDUrlNotFound`); and a
+     * navia-didcomm `InvalidState`, which it keeps for its own library
+     * errors. The first two are faults of the frame and fail the same way on
+     * every redelivery, so cap redeliveries per frame (the stored payload with
+     * the mediator's `delivery_id` left out, since the mediator mints a new
+     * `delivery_id` for every delivery) rather than retrying a
+     * `DatabaseError` forever.
      * - `DidCommError::GeneralError` when the interface is not open or the
      * runtime task fails.
+     *
+     * An `UnpackingError` message starts with one of these:
+     *
+     * - `Malformed message: `: not a well-formed JWE/JWS/JWM, or its
+     * encryption or signature does not verify (sender and recipient keys on
+     * different curves included); truncated JSON in the frame or its
+     * protected header (an empty frame included); an anoncrypt envelope that
+     * carries `apu` or is addressed to other keys than the authcrypt inside
+     * it; an authcrypt tag longer than 124 bytes; a signature or
+     * `from_prior` `alg` that does not match the signer's or issuer's key
+     * type; a sender or signer key, or a recipient secret in this store,
+     * that cannot be decoded.
+     * - `No matching recipient key found: `: addressed to keys this store does
+     * not hold, or a recipient key removed while the frame is unpacked.
+     * - `Decryption failed: `: a crypto algorithm or key agreement method this
+     * build does not support, including a sender verification method of a
+     * type the DID resolver does not support and a signer or `from_prior`
+     * issuer key of a type navia-didcomm does not support.
+     * - `Invalid message format: `: an argument navia-didcomm rejects, such as
+     * multibase key material without the `z` prefix or with an unknown or
+     * wrong multicodec prefix.
+     * - `Sender mismatch: `: a forged `from` (see Sender check above).
      *
      * # Example
      *
@@ -2953,7 +2995,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_navia_core_checksum_method_didcominterface_set_error_logging_enabled() != 27864) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_navia_core_checksum_method_didcominterface_unpack() != 28216) {
+    if (uniffi_navia_core_checksum_method_didcominterface_unpack() != 6160) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_navia_core_checksum_method_didcominterface_update() != 38998) {

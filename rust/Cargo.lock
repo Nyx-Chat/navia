@@ -3661,8 +3661,8 @@ dependencies = [
 
 [[package]]
 name = "navia-didcomm"
-version = "1.3.0"
-source = "git+https://github.com/Nyx-Chat/navia-didcomm.git?branch=main#e78f06c9033263608c88ecbeceb5af77fbf45a40"
+version = "1.3.1"
+source = "git+https://github.com/Nyx-Chat/navia-didcomm.git?branch=main#497734108797c031c8df24cb6dcd0aac35be1adc"
 dependencies = [
  "anyhow",
  "askar-crypto 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -120,15 +120,22 @@ pub fn map_packing_error(
 /// failure that cannot be told apart from one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnpackFailure {
-    /// Not a well-formed JWE, JWS or JWM (a wrong signature included).
+    /// Not a well-formed JWE, JWS or JWM (a wrong signature, truncated JSON and
+    /// key material that cannot be decoded included, such as a multicodec prefix
+    /// that cannot be read). A multibase key without the `z` prefix or with an
+    /// unknown or wrong multicodec prefix is `IllegalArgument` instead.
     Malformed,
-    /// Addressed to keys this store does not hold.
+    /// Addressed to keys this store does not hold (or a key removed while it
+    /// is unpacked).
     SecretNotFound,
     /// No algorithm this build supports can open it.
     NoCompatibleCrypto,
-    /// Uses a crypto algorithm or method this build does not support.
+    /// Uses a crypto algorithm, method or sender or signer key type this build
+    /// does not support.
     Unsupported,
-    /// Carries an argument navia-didcomm rejects.
+    /// Carries an argument navia-didcomm rejects (multibase key material
+    /// without the `z` prefix or with an unknown or wrong multicodec prefix,
+    /// for one).
     IllegalArgument,
     /// A later attempt can get past it, or it cannot be told apart from such a
     /// failure (some faults of the frame itself included, see
@@ -192,16 +199,26 @@ pub fn classify_unpack_failure(err: &navia_messaging::error::Error) -> UnpackFai
 /// Under v1.1.1 an inner `InvalidState` is also a store failure behind the
 /// secrets resolver or a failed DID resolution. v1.1.2 reports those as
 /// `IoError` and `DIDNotResolved`, which `classify_unpack_failure` keeps
-/// transient before this function is reached. Under both, navia-didcomm 1.3.0
-/// gives `InvalidState` to some faults of the frame itself: truncated JSON in the
-/// envelope or protected header (an empty frame included), because serde_json's
-/// `Eof` maps to `InvalidState`; a wrong skid; an anoncrypt/authcrypt recipient
-/// mismatch; a JWS signature kid that does not match. It gives a sender kid
-/// missing from its DID document `DIDUrlNotFound`. The kind alone cannot tell
-/// those apart from a transient failure, so they stay transient here too and fail
-/// the same way on every redelivery; a consumer has to cap redeliveries per frame
-/// (the stored payload with the mediator's `delivery_id` left out, since the
-/// mediator mints a new `delivery_id` for every delivery).
+/// transient before this function is reached. The pinned navia-didcomm 1.3.1
+/// labels the faults of the frame itself by cause, where 1.3.0 gave most of them
+/// `InvalidState`: truncated JSON (an empty frame included), an anoncrypt
+/// envelope that carries `apu` or is addressed to other keys than the authcrypt
+/// inside it, an authcrypt tag longer than 124 bytes, a signature `alg` that
+/// does not match the signer's key type and key material that cannot be decoded
+/// (a multicodec prefix that cannot be read included) are `Malformed`; a
+/// recipient key removed during the unpack is `SecretNotFound`; a sender or
+/// signer key of a type it does not support is `Unsupported`. Multibase key
+/// material without the `z` prefix or with an unknown or wrong multicodec prefix
+/// stays `IllegalArgument`, as in 1.3.0. A failed sender DID resolution keeps
+/// the DID resolver's kind: `DIDNotResolved`, or `Malformed` / `Unsupported`
+/// for a DID document navia-messaging's resolver cannot map. Two faults of the
+/// frame still carry a kind a transient failure has too: a sender DID that does
+/// not resolve is `DIDNotResolved`, and a sender kid missing from its DID
+/// document is `DIDUrlNotFound`. The kind alone cannot tell those, or a genuine
+/// navia-didcomm `InvalidState`, apart from a transient failure, so they stay
+/// transient and fail the same way on every redelivery; a consumer has to cap
+/// redeliveries per frame (the stored payload with the mediator's `delivery_id`
+/// left out, since the mediator mints a new `delivery_id` for every delivery).
 fn classify_didcomm_kind(kind: navia_didcomm::error::ErrorKind) -> UnpackFailure {
     use navia_didcomm::error::ErrorKind;
 

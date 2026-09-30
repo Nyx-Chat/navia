@@ -6,6 +6,7 @@
 use futures::executor::block_on;
 use navia_core::ffi::types::DIDCommMessage;
 use navia_core::{DidComInterface, DidCommError};
+use serde_json::Value;
 use tempfile::TempDir;
 use zeroize::Zeroize;
 
@@ -78,25 +79,274 @@ fn test_unpack_invalid_message() {
     }
 }
 
-/// Tripwire for the limitation documented on `DidComInterface::unpack`:
-/// navia-didcomm 1.3.0 maps serde_json's `Eof` to `InvalidState`, so an empty or
-/// truncated frame is reported as `DatabaseError` although it fails the same way
-/// on every redelivery. If navia-didcomm starts reporting it as `Malformed`, this
-/// test fails; flip it to `UnpackingError` and drop the caveat from the docs and
-/// the CHANGELOG.
+/// Opens a `DidComInterface` on a fresh store and generates one DID in it.
+fn party(seed_byte: u8) -> (DidComInterface, String, TempDir) {
+    let dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = dir.path().join("party.db").to_string_lossy().to_string();
+
+    let interface = DidComInterface::new(db_path.clone(), "did:peer:unused-mediator".to_string());
+    block_on(interface.open(db_path, vec![seed_byte; 32])).expect("Failed to open database");
+
+    let did = block_on(interface.generate_did("https://example.com/didcomm".to_string(), vec![]))
+        .expect("Failed to generate DID");
+
+    (interface, did, dir)
+}
+
+/// Packs a message from `from_did` to `to_did` without a forward: an authcrypt
+/// frame whose protected header names the sender key in `skid` and `apu`.
+fn authcrypt_frame(sender: &DidComInterface, from_did: &str, to_did: &str) -> String {
+    let message = DIDCommMessage {
+        id: "error-scenario".to_string(),
+        msg_type: "https://example.org/protocols/1.0/message".to_string(),
+        body: r#"{"content": "hello"}"#.to_string(),
+        from: Some(from_did.to_string()),
+        to: vec![to_did.to_string()],
+        authenticated: false,
+        encrypted_from_kid: None,
+        sign_from: None,
+        anonymous_sender: false,
+    };
+
+    block_on(sender.pack_no_forward(message, from_did.to_string(), vec![to_did.to_string()]))
+        .expect("Failed to pack")
+}
+
+/// Unpacks `frame` and hands back the error, failing the test if the frame is
+/// accepted.
+fn unpack_error(interface: &DidComInterface, frame: &str) -> DidCommError {
+    match block_on(interface.unpack(frame.to_string())) {
+        Ok(message) => panic!("unpack accepted {frame:?}: {message:?}"),
+        Err(err) => err,
+    }
+}
+
+/// What `unpack` is expected to throw: the FFI error and the start of its
+/// message, which is the navia-core variant's own prefix followed by the
+/// navia-messaging kind.
+#[derive(Debug)]
+enum Expected {
+    Unpacking(&'static str),
+    Database(&'static str),
+}
+
+/// `UnpackingError::MalformedMessage` over a navia-messaging `Malformed`.
+const MALFORMED: Expected = Expected::Unpacking("Malformed message: Malformed: ");
+/// `UnpackingError::DecryptionFailed` over a navia-messaging `Unsupported`.
+const UNSUPPORTED: Expected =
+    Expected::Unpacking("Decryption failed: Unsupported crypto or method: ");
+/// `StorageError::OperationFailed` over a navia-messaging `DIDNotResolved`.
+const DID_NOT_RESOLVED: Expected =
+    Expected::Database("Storage operation failed: unpack - DID not resolved: ");
+/// `StorageError::OperationFailed` over a navia-messaging `DIDUrlNotFound`.
+const DID_URL_NOT_FOUND: Expected =
+    Expected::Database("Storage operation failed: unpack - DID URL not found: ");
+
+fn assert_unpack_error(err: &DidCommError, expected: &Expected, case: &str) {
+    let (message, prefix) = match (err, expected) {
+        (DidCommError::UnpackingError { message }, Expected::Unpacking(prefix))
+        | (DidCommError::DatabaseError { message }, Expected::Database(prefix)) => {
+            (message, prefix)
+        }
+        (other, expected) => panic!("{case}: expected {expected:?}, got {other:?}"),
+    };
+    assert!(message.starts_with(prefix), "{case}: {message}");
+}
+
+const BASE64URL: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/// Unpadded base64url, the encoding of the JWE fields.
+fn base64url_encode(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let bits = chunk.iter().enumerate().fold(0u32, |bits, (i, &byte)| {
+            bits | (u32::from(byte) << (16 - 8 * i))
+        });
+        // n bytes take n + 1 characters.
+        for i in 0..=chunk.len() {
+            out.push(char::from(
+                BASE64URL[((bits >> (18 - 6 * i)) & 63) as usize],
+            ));
+        }
+    }
+    out
+}
+
+/// The inverse of `base64url_encode`.
+fn base64url_decode(text: &str) -> Vec<u8> {
+    let mut out = Vec::new();
+    let (mut bits, mut pending) = (0u32, 0u32);
+    for c in text.bytes() {
+        let value = BASE64URL
+            .iter()
+            .position(|&b| b == c)
+            .expect("a base64url character");
+        bits = (bits << 6) | value as u32;
+        pending += 6;
+        if pending >= 8 {
+            pending -= 8;
+            out.push((bits >> pending) as u8);
+            bits &= (1 << pending) - 1;
+        }
+    }
+    out
+}
+
+/// base58btc, the encoding behind the multibase `z` prefix of a did:key.
+fn base58btc_encode(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 58] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+    // Base-58 digits, least significant first.
+    let mut digits: Vec<u32> = Vec::new();
+    for &byte in bytes {
+        let mut carry = u32::from(byte);
+        for digit in &mut digits {
+            carry += *digit << 8;
+            *digit = carry % 58;
+            carry /= 58;
+        }
+        while carry > 0 {
+            digits.push(carry % 58);
+            carry /= 58;
+        }
+    }
+
+    let mut out = "1".repeat(bytes.iter().take_while(|&&byte| byte == 0).count());
+    out.extend(
+        digits
+            .iter()
+            .rev()
+            .map(|&digit| char::from(ALPHABET[digit as usize])),
+    );
+    out
+}
+
+/// The key id of a did:key over `key`, behind the multicodec prefix `codec`.
+fn did_key_kid(codec: &[u8], key: &[u8]) -> String {
+    let multibase = format!("z{}", base58btc_encode(&[codec, key].concat()));
+    format!("did:key:{multibase}#{multibase}")
+}
+
+/// Sets the top-level `field` of a JSON frame to `value`.
+fn with_field(frame: &str, field: &str, value: Value) -> String {
+    let mut frame: Value = serde_json::from_str(frame).expect("the frame is JSON");
+    frame[field] = value;
+    frame.to_string()
+}
+
+/// Decodes the protected header of a JSON frame, lets `edit` change it and
+/// encodes it back. The frame is not re-encrypted.
+fn with_protected_header(frame: &str, edit: impl FnOnce(&mut Value)) -> String {
+    let parsed: Value = serde_json::from_str(frame).expect("the frame is JSON");
+    let protected = parsed["protected"]
+        .as_str()
+        .expect("the frame has a protected header");
+    let mut header: Value =
+        serde_json::from_slice(&base64url_decode(protected)).expect("the protected header is JSON");
+    edit(&mut header);
+    with_field(
+        frame,
+        "protected",
+        base64url_encode(header.to_string().as_bytes()).into(),
+    )
+}
+
+/// An empty or truncated frame fails the same way on every redelivery, so it
+/// surfaces as `UnpackingError` (`UnpackingError::MalformedMessage`), which a
+/// consumer acknowledges. navia-didcomm 1.3.0 mapped serde_json's `Eof` to
+/// `InvalidState`, which surfaced as `DatabaseError`; 1.3.1 reports `Malformed`.
 #[test]
-fn test_unpack_truncated_frame_is_still_reported_as_database_error() {
-    let (interface, _temp_dir, _mediator, _mediator_dir) = create_test_interface();
+fn test_unpack_truncated_frame_is_malformed() {
+    let (alice, alice_did, _alice_dir) = party(1);
+    let (bob, bob_did, _bob_dir) = party(2);
+    let frame = authcrypt_frame(&alice, &alice_did, &bob_did);
+    assert!(frame.is_ascii());
 
-    let truncated_frames = ["", r#"{"ciphertext": "abc""#];
+    let cases = [
+        ("an empty frame", String::new()),
+        (
+            "an unterminated object",
+            r#"{"ciphertext": "abc""#.to_string(),
+        ),
+        ("a key without a value", r#"{"protected":"#.to_string()),
+        ("half of a frame", frame[..frame.len() / 2].to_string()),
+        (
+            "a cut protected header",
+            with_field(
+                &frame,
+                "protected",
+                base64url_encode(br#"{"alg":"ECDH-1PU+A256KW","#).into(),
+            ),
+        ),
+    ];
 
-    for frame in truncated_frames {
-        let result = block_on(interface.unpack(frame.to_string()));
-        assert!(
-            matches!(result, Err(DidCommError::DatabaseError { .. })),
-            "navia-didcomm 1.3.0 reports a truncated frame ({frame:?}) as InvalidState, \
-             which surfaces as DatabaseError, got {result:?}"
-        );
+    for (case, frame) in cases {
+        assert_unpack_error(&unpack_error(&bob, &frame), &MALFORMED, case);
+    }
+}
+
+/// Faults of the envelope a sender controls surface as `UnpackingError`
+/// (`UnpackingError::MalformedMessage`). navia-didcomm 1.3.0 gave them
+/// `InvalidState`, which surfaced as `DatabaseError`.
+#[test]
+fn test_unpack_tampered_envelope_is_malformed() {
+    let (alice, alice_did, _alice_dir) = party(1);
+    let (bob, bob_did, _bob_dir) = party(2);
+    let frame = authcrypt_frame(&alice, &alice_did, &bob_did);
+
+    let cases = [
+        (
+            // An anoncrypt (ECDH-ES) envelope has no sender key to name in apu.
+            "apu in an anoncrypt envelope",
+            with_protected_header(&frame, |header| {
+                assert_eq!(header["alg"], "ECDH-1PU+A256KW");
+                header["alg"] = "ECDH-ES+A256KW".into();
+            }),
+        ),
+        (
+            // ECDH-1PU derives the key over the tag, which fits only up to 124 bytes.
+            "an authcrypt tag of 125 bytes",
+            with_field(&frame, "tag", base64url_encode(&[0u8; 125]).into()),
+        ),
+    ];
+
+    for (case, frame) in cases {
+        assert_unpack_error(&unpack_error(&bob, &frame), &MALFORMED, case);
+    }
+}
+
+/// The authcrypt sender key is resolved before anything is decrypted.
+/// navia-didcomm 1.3.1 keeps the DID resolver's kind when that resolution
+/// fails, where 1.3.0 reported `InvalidState` (so `DatabaseError`). A sender DID
+/// document the resolver cannot map surfaces as `UnpackingError`: an
+/// unsupported key type as `UnpackingError::DecryptionFailed`, a key that does
+/// not decode as `UnpackingError::MalformedMessage`. A sender DID that does not
+/// resolve still surfaces as `DatabaseError`, now over `DIDNotResolved`, and so
+/// does a sender key its DID document does not list (`DIDUrlNotFound`, as
+/// before); a consumer redelivers those with a cap per frame.
+#[test]
+fn test_unpack_failed_sender_resolution_keeps_its_kind() {
+    let (alice, alice_did, _alice_dir) = party(1);
+    let (bob, bob_did, _bob_dir) = party(2);
+    let frame = authcrypt_frame(&alice, &alice_did, &bob_did);
+
+    // did:key checks only the key length, so both did:key documents resolve,
+    // and the resolver then refuses them: a secp256k1 key has no type here, and
+    // the P-256 bytes are not a valid key.
+    let cases = [
+        ("did:unknown:nobody#key-1".to_string(), DID_NOT_RESOLVED),
+        (format!("{alice_did}#key-9"), DID_URL_NOT_FOUND),
+        (did_key_kid(&[0xe7, 0x01], &[0x02; 33]), UNSUPPORTED),
+        (did_key_kid(&[0x80, 0x24], &[0xff; 33]), MALFORMED),
+    ];
+
+    for (kid, expected) in cases {
+        // skid and apu both name the sender key and must agree.
+        let tampered = with_protected_header(&frame, |header| {
+            header["skid"] = kid.as_str().into();
+            header["apu"] = base64url_encode(kid.as_bytes()).into();
+        });
+        assert_unpack_error(&unpack_error(&bob, &tampered), &expected, &kid);
     }
 }
 
