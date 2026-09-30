@@ -18,10 +18,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed cargo-ndk from build process as it interferes with alignment flags
 - Updated CI/CD workflows to use NDK r27c and verify alignment
 - Enhanced build scripts with automatic alignment fixes
+- `rust/Cargo.lock` pins navia-messaging 1.1.2 (the manifest is unchanged).
+  1.1.2 passes navia-didcomm's error kind through instead of wrapping every
+  unpack failure in `InvalidState`, and reports a failed key store as
+  `IoError`. The FFI classes are unchanged: a store failure still surfaces as
+  `DidCommError::DatabaseError` (Kotlin `DidCommException.DatabaseException`)
+  and a bad frame as `UnpackingError`; tests pin both, end to end through the
+  FFI with a closed store. Only the message text changes: the navia-messaging
+  part of the `DidCommError` message now starts with the passed-through kind
+  (`Malformed message: Malformed: ...` where 1.1.1 gave `Malformed message:
+  Invalid state: ...`), and a store failure reads `Storage operation failed:
+  unpack - IO error: ...`.
+- The `DidComInterface.unpack` doc comment (`interface.rs`) says the redelivery
+  cap for a `DatabaseError` is per frame, not per `delivery_id`, as `handler.rs`
+  and `docs/API.md` have since 1.4.0. The doc comment is part of the method's
+  UniFFI checksum, so this doc-only edit moves it (to 28216);
+  Kotlin and Swift bindings must come from the same build as the library they
+  call, or the first FFI call fails with `UniFFI API checksum mismatch`.
+- The committed Swift bindings in `ios/Navia/Generated/` are regenerated from
+  the source (the 1.4.0 copy carried stale `pack`, `pack_no_forward` and
+  `unpack` checksums), and `scripts/build-for-ios.sh` generates them with
+  `--no-format`, so the output no longer depends on whether the machine has
+  swiftformat.
+- The GitHub release notes name the published coordinate `com.nyx:navia` (not
+  `com.github.nyx-chat:navia`), add the JNA dependency and the GitHub Packages
+  credentials note, drop the Swift Package Manager snippet (the repository has
+  no `Package.swift`), name the `Navia.xcframework-<version>.zip` asset and link
+  the iOS guide's known problems. `ANDROID_INTEGRATION.md` gains the same JNA
+  line and credentials note as `README.md`.
+- `docs/IOS_INTEGRATION.md` drops Swift Package Manager, names the release
+  asset, lists what the pod's from-source build needs, and describes the known
+  problems of both iOS paths (the pod does not link; the XCFramework may fail
+  to load at launch). The README's release steps describe the workflow that
+  actually publishes, including the iOS `MARKETING_VERSION`.
+- CI: the iOS test job picks an available iPhone simulator for the SDK of the
+  runner's Xcode instead of a fixed device, and fails when the committed
+  `ios/Navia/Generated/` differs from the bindings the build generated. The
+  release workflow takes the Android and iOS binaries from the release PR's own
+  PR Validation run (the successful run for the PR's head commit) instead of
+  the latest successful run of any PR, and fails before it tags or publishes
+  anything when that run or its artifacts are missing.
 
 ### Fixed
 - Native libraries now properly align all LOAD segments to 16KB boundaries
 - Resolved Google Play Store rejection for Android 15+ compatibility
+- A release could publish another PR's binaries: it downloaded the artifacts of
+  whichever PR Validation run had succeeded last, with no filter on branch, PR
+  or commit.
+
+### Compatibility
+- FFI signatures, `DidCommError` variants and the DIDComm wire format are
+  unchanged. The `unpack` checksum changes, so a consumer takes the Kotlin or
+  Swift bindings and the library from the same AAR / XCFramework, as usual.
+- A consumer that parses `DidCommError` message text sees the new kind prefix
+  described above; one that branches on the exception class (nyx-android does)
+  is unaffected.
 
 ## [1.4.0] - 2026-09-29
 

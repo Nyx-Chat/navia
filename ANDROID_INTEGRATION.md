@@ -20,8 +20,14 @@ Add the Navia library to your module's `build.gradle.kts`:
 ```kotlin
 dependencies {
     implementation("com.nyx:navia:1.4.0")
+    implementation("net.java.dev.jna:jna:5.17.0@aar")
 }
 ```
+
+Navia is published to GitHub Packages, so your Gradle repositories need
+`https://maven.pkg.github.com/Nyx-Chat/navia` with a GitHub user and a token
+that has the `read:packages` scope (see
+[Troubleshooting](docs/TROUBLESHOOTING.md#failed-to-resolve-comnyxnaviaxxx)).
 
 ### 2. Configure ProGuard/R8
 
