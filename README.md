@@ -13,7 +13,7 @@ Navia is a high-performance DIDComm v2 messaging library for Android and iOS, bu
 
 ## Documentation
 
-- 📱 [Android Integration Guide](docs/ANDROID_INTEGRATION.md) - Complete Android setup and usage
+- 📱 [Android Integration Guide](ANDROID_INTEGRATION.md) - Complete Android setup and usage
 - 🍎 [iOS Integration Guide](docs/IOS_INTEGRATION.md) - Complete iOS setup and usage
 - 📚 [API Reference](docs/API.md) - Comprehensive API documentation and patterns
 - 🔧 [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
@@ -42,6 +42,10 @@ Add to your `Podfile`:
 ```ruby
 pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.4.0'
 ```
+
+The pod does not link today, and the release XCFramework may fail to load at
+launch; see [Installation in the iOS Integration Guide](docs/IOS_INTEGRATION.md#installation)
+before you use either.
 
 ### Basic Usage
 
@@ -132,7 +136,7 @@ relayed to you comes back `false`. A message you build for `pack` leaves
 these four fields at their defaults; see
 [Sender authentication fields](docs/API.md#sender-authentication-fields).
 
-For detailed integration instructions, see the [Android Integration Guide](docs/ANDROID_INTEGRATION.md) or [iOS Integration Guide](docs/IOS_INTEGRATION.md).
+For detailed integration instructions, see the [Android Integration Guide](ANDROID_INTEGRATION.md) or [iOS Integration Guide](docs/IOS_INTEGRATION.md).
 
 ## Building from Source
 
@@ -236,21 +240,29 @@ The project uses GitHub Actions with three main workflows:
    - Coverage reporting
 
 3. **Release and Publish** (`release-and-publish.yml`): Automated releases
-   - Triggers on version tags (e.g., `v1.2.3`)
-   - Builds for all architectures
-   - Publishes to GitHub Packages
-   - Creates GitHub releases with artifacts
+   - Triggers on a push to `main` that changes `rust/navia-core/Cargo.toml`
+   - Tags `v<version>` itself, and skips the release when that tag already exists
+   - Publishes the AAR to GitHub Packages
+   - Creates the GitHub release and attaches `Navia.xcframework-<version>.zip`
 
 ### Publishing New Version
 
-1. Update version in `rust/navia-core/Cargo.toml`
-2. Commit and tag:
-   ```bash
-   git commit -am "Release v1.x.x"
-   git tag v1.x.x
-   git push origin main --tags
-   ```
-3. GitHub Actions automatically handles the rest
+Bump every version in one release commit:
+
+1. `rust/navia-core/Cargo.toml` `version`, and the `navia-core` entry in `rust/Cargo.lock`
+2. `android/gradle.properties` `VERSION_NAME`
+3. `Navia.podspec` `spec.version`
+4. `ios/Navia.xcodeproj/project.pbxproj` `MARKETING_VERSION`, in all four build
+   configurations (Navia and NaviaTests, Debug and Release). Nothing derives it
+   from `Cargo.toml`, so it stays behind unless it is bumped here (it still read
+   `1.0` at 1.4.0).
+5. The install snippets in `README.md`, `ANDROID_INTEGRATION.md`,
+   `docs/IOS_INTEGRATION.md` and `docs/TROUBLESHOOTING.md`
+6. `CHANGELOG.md`: the section for the new version
+
+Then merge the commit to `main`. The push that changes `rust/navia-core/Cargo.toml`
+starts the release; do not tag by hand, since the workflow skips a version whose
+tag already exists.
 
 ## Architecture
 

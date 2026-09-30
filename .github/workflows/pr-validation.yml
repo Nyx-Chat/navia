@@ -213,8 +213,45 @@ jobs:
       - name: Run iOS tests
         run: |
           cd ios
-          # Use a specific iPhone simulator (iPhone 16 with OS 18.6)
-          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.6' test
+          # Pick a simulator this runner has: the first iPhone on the newest iOS
+          # runtime the active Xcode can run. The macOS image's simulator set
+          # changes, so a hard-coded name/OS pair fails whenever the image does not
+          # ship it. The image also installs newer Xcodes whose iOS runtimes the
+          # shared simulator service lists as available, while xcodebuild here is
+          # the image's default Xcode, which rejects a runtime newer than its SDK's
+          # major version; so cap the runtime at that major version.
+          SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version) || {
+            echo "::error title=No iOS Simulator SDK::The active Xcode ($(xcode-select -p)) has no iphonesimulator SDK, so NaviaTests cannot run."
+            exit 1
+          }
+          SDK_MAJOR=${SDK_VERSION%%.*}
+          case "$SDK_MAJOR" in
+            ''|*[!0-9]*)
+              echo "::error title=Unreadable iOS Simulator SDK version::xcrun reported iphonesimulator SDK version '$SDK_VERSION'."
+              exit 1
+              ;;
+          esac
+          SIMULATOR=$(xcrun simctl list devices available -j | jq -r --argjson sdk "$SDK_MAJOR" '
+            [ .devices
+              | to_entries[]
+              | select(.key | test("SimRuntime\\.iOS-[0-9]"))
+              | { version: (.key | capture("iOS-(?<v>[0-9-]+)$").v | split("-") | map(tonumber)),
+                  iphones: [ .value[] | select(.name | startswith("iPhone")) ] }
+              | select(.version[0] <= $sdk)
+              | select(.iphones | length > 0) ]
+            | sort_by(.version)
+            | last
+            | if . == null then empty
+              else "\(.iphones[0].udid)\t\(.iphones[0].name), iOS \(.version | map(tostring) | join("."))"
+              end')
+          if [ -z "$SIMULATOR" ]; then
+            echo "::error title=No iPhone simulator::This runner has no available iPhone simulator on an iOS ${SDK_MAJOR}.x or older runtime (active Xcode $(xcode-select -p), iphonesimulator SDK ${SDK_VERSION}), so NaviaTests cannot run. Available devices follow."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          IFS=$'\t' read -r SIMULATOR_ID SIMULATOR_NAME <<< "$SIMULATOR"
+          echo "Running NaviaTests on $SIMULATOR_NAME ($SIMULATOR_ID)"
+          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" test
 
   # Android build - run in parallel with iOS build using matrix strategy
   android-build:

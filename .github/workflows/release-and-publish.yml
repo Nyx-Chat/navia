@@ -160,12 +160,14 @@ jobs:
             ### Installation
             
             #### Android
-            Add to your project's `build.gradle`:
-            ```gradle
-            implementation 'com.github.nyx-chat:navia:${{ steps.get_version.outputs.RAW_VERSION }}'
+            Published to GitHub Packages (`https://maven.pkg.github.com/Nyx-Chat/navia`). Add to your module's `build.gradle.kts`:
+            ```kotlin
+            implementation("com.nyx:navia:${{ steps.get_version.outputs.RAW_VERSION }}")
             ```
             
             #### iOS
+            
+            Both iOS paths below have known problems (the pod does not link today; the XCFramework may fail to load at launch). Read [Installation in the iOS Integration Guide](https://github.com/Nyx-Chat/navia/blob/${{ steps.get_version.outputs.VERSION }}/docs/IOS_INTEGRATION.md#installation) before using either.
             
             **CocoaPods:**
             Add to your `Podfile`:
@@ -173,14 +175,8 @@ jobs:
             pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => '${{ steps.get_version.outputs.VERSION }}'
             ```
             
-            **Swift Package Manager:**
-            Add to your `Package.swift`:
-            ```swift
-            .package(url: "https://github.com/Nyx-Chat/navia.git", .exact("${{ steps.get_version.outputs.RAW_VERSION }}"))
-            ```
-            
             **XCFramework (Manual):**
-            Download and drag `Navia.xcframework` from the release assets into your Xcode project.
+            Download `Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip` from the release assets, unzip it and drag `Navia.xcframework` into your Xcode project.
             
             ---
             *This release was automatically created when the version was bumped in Cargo.toml*

@@ -3681,8 +3681,8 @@ dependencies = [
 
 [[package]]
 name = "navia-messaging"
-version = "1.1.1"
-source = "git+https://github.com/Nyx-Chat/navia-messaging.git?branch=main#3f99b8b157d7feee1159abf1b05a4ee0f8236394"
+version = "1.1.2"
+source = "git+https://github.com/Nyx-Chat/navia-messaging.git?branch=main#1d8b557f1f0b9cb801fc3c27fc5fcda9397c6f1c"
 dependencies = [
  "affinidi-did-common",
  "affinidi-did-resolver-cache-sdk",
