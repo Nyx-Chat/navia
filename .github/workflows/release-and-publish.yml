@@ -129,7 +129,7 @@ jobs:
 
       - name: Download Android artifacts from PR validation
         if: steps.check_tag.outputs.EXISTS == 'false'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v25
         with:
           workflow: pr-validation.yml
           run_id: ${{ steps.validation_run.outputs.RUN_ID }}
@@ -298,7 +298,7 @@ jobs:
       # release-and-publish job picked it and checked this artifact exists.
       - name: Download iOS artifacts from PR validation
         if: needs.release-and-publish.outputs.tag_created == 'true'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v25
         with:
           workflow: pr-validation.yml
           run_id: ${{ needs.release-and-publish.outputs.validation_run_id }}
