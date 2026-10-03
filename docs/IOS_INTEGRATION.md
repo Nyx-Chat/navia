@@ -18,7 +18,7 @@ check them before you rely on either.
 Add to your `Podfile`:
 
 ```ruby
-pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.4.0'
+pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.5.0'
 ```
 
 Then run:

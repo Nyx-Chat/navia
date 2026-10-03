@@ -30,7 +30,7 @@ Add to your app's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.nyx:navia:1.4.0")
+    implementation("com.nyx:navia:1.5.0")
     implementation("net.java.dev.jna:jna:5.17.0@aar")
 }
 ```
@@ -45,7 +45,7 @@ that has the `read:packages` scope (see
 Add to your `Podfile`:
 
 ```ruby
-pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.4.0'
+pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.5.0'
 ```
 
 The pod does not link today, and the release XCFramework may fail to load at
