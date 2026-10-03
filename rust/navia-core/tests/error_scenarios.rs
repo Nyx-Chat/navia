@@ -6,7 +6,9 @@
 use futures::executor::block_on;
 use navia_core::ffi::types::DIDCommMessage;
 use navia_core::{DidComInterface, DidCommError};
-use serde_json::Value;
+use navia_didcomm::{Attachment, Message as WireMessage, PackEncryptedOptions};
+use navia_messaging::messaging::DidcommMessaging;
+use serde_json::{json, Value};
 use tempfile::TempDir;
 use zeroize::Zeroize;
 
@@ -114,8 +116,23 @@ fn authcrypt_frame(sender: &DidComInterface, from_did: &str, to_did: &str) -> St
 
 /// Unpacks `frame` and hands back the error, failing the test if the frame is
 /// accepted.
+///
+/// Outside a Tokio runtime, `DidComInterface::unpack` spawns the unpack on the
+/// interface's own runtime, and a panic in that task surfaces as
+/// `DidCommError::GeneralError`.
 fn unpack_error(interface: &DidComInterface, frame: &str) -> DidCommError {
     match block_on(interface.unpack(frame.to_string())) {
+        Ok(message) => panic!("unpack accepted {frame:?}: {message:?}"),
+        Err(err) => err,
+    }
+}
+
+/// `unpack_error` from inside a Tokio runtime, where `DidComInterface::unpack`
+/// awaits the unpack on the caller's runtime, so a panic in it unwinds into the
+/// caller.
+fn unpack_error_in_runtime(interface: &DidComInterface, frame: &str) -> DidCommError {
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+    match runtime.block_on(interface.unpack(frame.to_string())) {
         Ok(message) => panic!("unpack accepted {frame:?}: {message:?}"),
         Err(err) => err,
     }
@@ -151,6 +168,22 @@ fn assert_unpack_error(err: &DidCommError, expected: &Expected, case: &str) {
         (other, expected) => panic!("{case}: expected {expected:?}, got {other:?}"),
     };
     assert!(message.starts_with(prefix), "{case}: {message}");
+}
+
+/// Asserts that unpacking `frame` fails as `expected` both outside and inside a
+/// Tokio runtime, the two ways `DidComInterface::unpack` runs the unpack.
+fn assert_unpack_error_on_both_paths(
+    interface: &DidComInterface,
+    frame: &str,
+    expected: &Expected,
+    case: &str,
+) {
+    assert_unpack_error(&unpack_error(interface, frame), expected, case);
+    assert_unpack_error(
+        &unpack_error_in_runtime(interface, frame),
+        expected,
+        &format!("{case} (in a Tokio runtime)"),
+    );
 }
 
 const BASE64URL: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -251,6 +284,16 @@ fn with_protected_header(frame: &str, edit: impl FnOnce(&mut Value)) -> String {
     )
 }
 
+/// Names `kid` as the sender key of an authcrypt frame. The frame is not
+/// re-encrypted.
+fn with_sender_kid(frame: &str, kid: &str) -> String {
+    // skid and apu both name the sender key and must agree.
+    with_protected_header(frame, |header| {
+        header["skid"] = kid.into();
+        header["apu"] = base64url_encode(kid.as_bytes()).into();
+    })
+}
+
 /// An empty or truncated frame fails the same way on every redelivery, so it
 /// surfaces as `UnpackingError` (`UnpackingError::MalformedMessage`), which a
 /// consumer acknowledges. navia-didcomm 1.3.0 mapped serde_json's `Eof` to
@@ -317,36 +360,236 @@ fn test_unpack_tampered_envelope_is_malformed() {
 
 /// The authcrypt sender key is resolved before anything is decrypted.
 /// navia-didcomm 1.3.1 keeps the DID resolver's kind when that resolution
-/// fails, where 1.3.0 reported `InvalidState` (so `DatabaseError`). A sender DID
-/// document the resolver cannot map surfaces as `UnpackingError`: an
-/// unsupported key type as `UnpackingError::DecryptionFailed`, a key that does
-/// not decode as `UnpackingError::MalformedMessage`. A sender DID that does not
-/// resolve still surfaces as `DatabaseError`, now over `DIDNotResolved`, and so
-/// does a sender key its DID document does not list (`DIDUrlNotFound`, as
-/// before); a consumer redelivers those with a cap per frame.
+/// fails, where 1.3.0 reported `InvalidState` (so `DatabaseError`).
+/// navia-messaging's resolver resolves only did:peer and did:key and refuses
+/// any other method as `Unsupported` without looking the DID up, so such a
+/// sender surfaces as `UnpackingError::DecryptionFailed`. A sender DID document
+/// the resolver cannot map surfaces as `UnpackingError` too: an unsupported key
+/// type as `UnpackingError::DecryptionFailed`, a key that does not decode as
+/// `UnpackingError::MalformedMessage`. A did:peer or did:key sender DID that
+/// does not resolve surfaces as `DatabaseError` over `DIDNotResolved`, a
+/// malformed one included unless it panics its method's resolver, and so does a
+/// sender key its DID document does not list (`DIDUrlNotFound`); a consumer
+/// redelivers those with a cap per frame.
 #[test]
 fn test_unpack_failed_sender_resolution_keeps_its_kind() {
     let (alice, alice_did, _alice_dir) = party(1);
     let (bob, bob_did, _bob_dir) = party(2);
     let frame = authcrypt_frame(&alice, &alice_did, &bob_did);
 
-    // did:key checks only the key length, so both did:key documents resolve,
-    // and the resolver then refuses them: a secp256k1 key has no type here, and
-    // the P-256 bytes are not a valid key.
+    // did-peer implements only numalgo 0 and 2, so a numalgo 4 DID does not
+    // resolve. A numalgo 2 DID with an unknown purpose code (X) or with key
+    // material that is not base58, and a did:key that is not base58, do not
+    // resolve either: their resolvers return an error for them without
+    // panicking. did:key checks only the key length, so both did:key documents
+    // built here resolve, and the resolver then refuses them: a secp256k1 key
+    // has no type here, and the P-256 bytes are not a valid key.
     let cases = [
-        ("did:unknown:nobody#key-1".to_string(), DID_NOT_RESOLVED),
+        ("did:unknown:nobody#key-1".to_string(), UNSUPPORTED),
+        ("did:peer:4nobody#key-1".to_string(), DID_NOT_RESOLVED),
+        ("did:peer:2.Xz6Mk#key-1".to_string(), DID_NOT_RESOLVED),
+        ("did:peer:2.Vz0OIl#key-1".to_string(), DID_NOT_RESOLVED),
+        ("did:key:z0OIl#key-1".to_string(), DID_NOT_RESOLVED),
         (format!("{alice_did}#key-9"), DID_URL_NOT_FOUND),
         (did_key_kid(&[0xe7, 0x01], &[0x02; 33]), UNSUPPORTED),
         (did_key_kid(&[0x80, 0x24], &[0xff; 33]), MALFORMED),
     ];
 
     for (kid, expected) in cases {
-        // skid and apu both name the sender key and must agree.
-        let tampered = with_protected_header(&frame, |header| {
-            header["skid"] = kid.as_str().into();
-            header["apu"] = base64url_encode(kid.as_bytes()).into();
-        });
+        let tampered = with_sender_kid(&frame, &kid);
         assert_unpack_error(&unpack_error(&bob, &tampered), &expected, &kid);
+    }
+}
+
+/// The sender DID comes from the unauthenticated `skid` and `apu`, so whoever
+/// gets a frame to the recipient picks the DID the resolver is handed. A
+/// did:web DID the DID cache client cannot parse is refused by method before
+/// the cache client sees it: `UnpackingError::DecryptionFailed` over
+/// `Unsupported`, which a consumer acknowledges, and never `GeneralError`, which
+/// is what a panic inside the unpack would surface as.
+#[test]
+fn test_unpack_unparsable_did_web_sender_is_unsupported() {
+    let (alice, alice_did, _alice_dir) = party(1);
+    let (bob, bob_did, _bob_dir) = party(2);
+    let frame = authcrypt_frame(&alice, &alice_did, &bob_did);
+
+    let kid = "did:web:a!b#key-1";
+    assert_unpack_error_on_both_paths(&bob, &with_sender_kid(&frame, kid), &UNSUPPORTED, kid);
+}
+
+/// A well-formed did:web sender DID is refused the same way, before anything
+/// looks it up, so no DID document is fetched from the host the frame names.
+#[test]
+fn test_unpack_did_web_sender_is_refused_without_a_lookup() {
+    let (alice, alice_did, _alice_dir) = party(1);
+    let (bob, bob_did, _bob_dir) = party(2);
+    let frame = authcrypt_frame(&alice, &alice_did, &bob_did);
+
+    let kid = "did:web:example.com#key-1";
+    assert_unpack_error_on_both_paths(&bob, &with_sender_kid(&frame, kid), &UNSUPPORTED, kid);
+}
+
+/// A did:peer sender DID cut off after its numalgo makes the did-peer resolver
+/// slice past its end. navia-messaging's resolver contains that panic and
+/// reports `Malformed`, so it surfaces as `UnpackingError::MalformedMessage`,
+/// never as `GeneralError`.
+#[test]
+fn test_unpack_cut_off_did_peer_sender_is_malformed() {
+    let (alice, alice_did, _alice_dir) = party(1);
+    let (bob, bob_did, _bob_dir) = party(2);
+    let frame = authcrypt_frame(&alice, &alice_did, &bob_did);
+
+    let kid = "did:peer:2#key-1";
+    assert_unpack_error_on_both_paths(&bob, &with_sender_kid(&frame, kid), &MALFORMED, kid);
+}
+
+/// A JSON JWS with one signature that names `kid` as the signer key. Nothing is
+/// signed: the signature is a placeholder.
+fn jws_signed_by(kid: &str) -> String {
+    json!({
+        "payload": base64url_encode(b"{}"),
+        "signatures": [{
+            "protected": base64url_encode(
+                br#"{"typ":"application/didcomm-signed+json","alg":"EdDSA"}"#,
+            ),
+            "signature": "AA",
+            "header": { "kid": kid },
+        }],
+    })
+    .to_string()
+}
+
+/// The signer kid of a JWS sits in its unprotected header, and the signer DID
+/// is resolved before the signature is verified, so whoever gets a JWS to the
+/// recipient picks the DID the resolver is handed, as with an authcrypt sender.
+/// navia-didcomm keeps the resolver's kind when the signer DID does not
+/// resolve, so a did:web signer DID is refused by method without a lookup:
+/// `UnpackingError::DecryptionFailed` over `Unsupported`, never `GeneralError`.
+#[test]
+fn test_unpack_did_web_signer_is_unsupported() {
+    let (bob, _bob_did, _bob_dir) = party(2);
+
+    for kid in ["did:web:a!b#key-1", "did:web:example.com#key-1"] {
+        assert_unpack_error_on_both_paths(&bob, &jws_signed_by(kid), &UNSUPPORTED, kid);
+    }
+}
+
+/// Anoncrypts a routing forward whose `next` is `next` to `to`. The FFI's
+/// `DIDCommMessage` carries no attachments and a forward needs one, so a raw
+/// navia-messaging store outside the FFI packs it.
+fn anoncrypt_forward(next: &str, to: &str) -> String {
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+    let dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = dir.path().join("relay.db").to_string_lossy().to_string();
+    let store_key = askar_storage::generate_raw_store_key(Some(&[77u8; 32])).expect("store key");
+
+    let forward = WireMessage::build(
+        "error-scenario-forward".to_string(),
+        "https://didcomm.org/routing/2.0/forward".to_string(),
+        json!({ "next": next }),
+    )
+    .attachment(Attachment::json(json!({})).finalize())
+    .finalize();
+
+    runtime.block_on(async {
+        let messaging = DidcommMessaging::provision_sqlite(&db_path, store_key)
+            .await
+            .expect("Failed to provision the relay's store");
+        let packed = messaging
+            .pack_encrypted(
+                &forward,
+                &[to],
+                None,
+                None,
+                &PackEncryptedOptions::no_forward(),
+            )
+            .await
+            .expect("Failed to pack the forward");
+        let (frame, _metadata) = packed.into_iter().next().expect("one packed frame");
+        frame
+    })
+}
+
+/// Unpack unwraps a routing forward inside an anoncrypt layer when the
+/// recipient holds a key-agreement secret for its `next`, and a bare-DID `next`
+/// is resolved for that, before anything is authenticated: an anoncrypt layer
+/// has no sender. navia-didcomm keeps the resolver's kind there too, so a
+/// did:web `next` is refused by method without a lookup:
+/// `UnpackingError::DecryptionFailed` over `Unsupported`, never `GeneralError`.
+#[test]
+fn test_unpack_forward_to_did_web_next_is_unsupported() {
+    let (bob, bob_did, _bob_dir) = party(2);
+
+    for next in ["did:web:a!b", "did:web:example.com"] {
+        let frame = anoncrypt_forward(next, &bob_did);
+        assert_unpack_error_on_both_paths(&bob, &frame, &UNSUPPORTED, next);
+    }
+}
+
+/// A bare plaintext frame whose `from_prior` JWT names `kid` as the issuer key.
+/// Nothing is signed: the JWT signature is a placeholder. Packing verifies
+/// `from_prior`, so the message is serialized rather than packed.
+fn plaintext_with_from_prior(kid: &str) -> String {
+    let header = json!({ "typ": "JWT", "alg": "EdDSA", "kid": kid }).to_string();
+    let jwt = format!(
+        "{}.{}.AA",
+        base64url_encode(header.as_bytes()),
+        base64url_encode(b"{}")
+    );
+
+    let message = WireMessage::build(
+        "error-scenario-from-prior".to_string(),
+        "https://example.org/protocols/1.0/message".to_string(),
+        json!({}),
+    )
+    .from_prior(jwt)
+    .finalize();
+    serde_json::to_string(&message).expect("the message serializes")
+}
+
+/// The issuer kid of a plaintext's `from_prior` JWT sits in the JWT header, and
+/// the issuer DID is resolved before the JWT signature is verified, so in a
+/// bare or anoncrypted plaintext it is resolved before anything is
+/// authenticated, and whoever gets the frame to the recipient picks the DID the
+/// resolver is handed. navia-didcomm keeps the resolver's kind there too, so a
+/// did:web issuer DID is refused by method without a lookup:
+/// `UnpackingError::DecryptionFailed` over `Unsupported`, never `GeneralError`.
+#[test]
+fn test_unpack_did_web_from_prior_issuer_is_unsupported() {
+    let (bob, _bob_did, _bob_dir) = party(2);
+
+    for kid in ["did:web:a!b#key-1", "did:web:example.com#key-1"] {
+        assert_unpack_error_on_both_paths(&bob, &plaintext_with_from_prior(kid), &UNSUPPORTED, kid);
+    }
+}
+
+/// A JWS signer, forward `next` or `from_prior` issuer DID goes through the
+/// same resolver as an authcrypt sender DID and fails with the same kind. A
+/// did:peer DID cut off after its numalgo panics the did-peer resolver, which
+/// navia-messaging's resolver reports as `Malformed`
+/// (`UnpackingError::MalformedMessage`, never `GeneralError`). A did:peer DID
+/// of a numalgo did-peer does not implement does not resolve, which surfaces
+/// as `DatabaseError` over `DIDNotResolved` and fails the same way on every
+/// redelivery.
+#[test]
+fn test_unpack_failed_did_peer_signer_next_and_issuer_keep_their_kind() {
+    let (bob, bob_did, _bob_dir) = party(2);
+
+    let cases = [
+        ("did:peer:2", MALFORMED),
+        ("did:peer:4nobody", DID_NOT_RESOLVED),
+    ];
+
+    for (did, expected) in cases {
+        let kid = format!("{did}#key-1");
+        let frames = [
+            ("signer", jws_signed_by(&kid)),
+            ("forward next", anoncrypt_forward(did, &bob_did)),
+            ("from_prior issuer", plaintext_with_from_prior(&kid)),
+        ];
+        for (role, frame) in frames {
+            assert_unpack_error_on_both_paths(&bob, &frame, &expected, &format!("{role} {did}"));
+        }
     }
 }
 
