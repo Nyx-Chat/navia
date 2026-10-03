@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed cargo-ndk from build process as it interferes with alignment flags
 - Updated CI/CD workflows to use NDK r27c and verify alignment
 - Enhanced build scripts with automatic alignment fixes
+
+### Fixed
+- Native libraries now properly align all LOAD segments to 16KB boundaries
+- Resolved Google Play Store rejection for Android 15+ compatibility
+
+## [1.5.0] - 2026-10-03
+
+### Changed
 - `rust/Cargo.lock` pins navia-messaging 1.1.2 (the manifest is unchanged).
   1.1.2 passes navia-didcomm's error kind through instead of wrapping every
   unpack failure in `InvalidState`, and reports a failed key store as
@@ -141,16 +149,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anything when that run or its artifacts are missing.
 
 ### Fixed
-- Native libraries now properly align all LOAD segments to 16KB boundaries
-- Resolved Google Play Store rejection for Android 15+ compatibility
 - A release could publish another PR's binaries: it downloaded the artifacts of
   whichever PR Validation run had succeeded last, with no filter on branch, PR
   or commit.
 
 ### Compatibility
-- FFI signatures, `DidCommError` variants and the DIDComm wire format are
-  unchanged. The `unpack` checksum changes, so a consumer takes the Kotlin or
-  Swift bindings and the library from the same AAR / XCFramework, as usual.
+- Minor release. FFI signatures, UniFFI records, `DidCommError` variants and the
+  DIDComm wire format are unchanged, but the exception class of many unpack
+  failures changes (the two behaviour changes below) and the `unpack` method
+  checksum moves (to 6160), so consumers rebuild against the 1.5.0 AAR /
+  xcframework and take the Kotlin or Swift bindings from the same release.
 - A consumer that parses `DidCommError` message text sees the new kind prefix
   described above. The navia-messaging 1.1.2 pin changes no exception class.
 - Behaviour change on unpack from the navia-didcomm 1.3.1 pin: the frame faults
