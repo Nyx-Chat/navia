@@ -145,12 +145,13 @@ pub enum UnpackFailure {
 
 /// Classifies a failed `DidcommMessaging::unpack_message`.
 ///
-/// The outer navia-messaging kind is read first. On the pinned v1.1.2 it is
-/// navia-didcomm's kind, passed through 1:1 for the nine kinds both crates name.
-/// A failed key store is `IoError`: navia-messaging's secrets resolver reports
-/// it that way and navia-didcomm never raises `IoError` itself, so it stays
-/// transient. `InvalidState` is navia-didcomm's own `InvalidState` or one of the
-/// navia-didcomm kinds navia-messaging has no name for.
+/// The outer navia-messaging kind is read first. Since v1.1.2 (the pinned
+/// v1.1.3 included) it is navia-didcomm's kind, passed through 1:1 for the nine
+/// kinds both crates name. A failed key store is `IoError`: navia-messaging's
+/// secrets resolver reports it that way and navia-didcomm never raises
+/// `IoError` itself, so it stays transient. `InvalidState` is navia-didcomm's
+/// own `InvalidState` or one of the navia-didcomm kinds navia-messaging has no
+/// name for.
 ///
 /// v1.1.1 wrapped every unpack failure in `InvalidState` (a failed key store
 /// included, labelled `InvalidState` inside too), so the `InvalidState` arm still
@@ -188,7 +189,7 @@ pub fn classify_unpack_failure(err: &navia_messaging::error::Error) -> UnpackFai
 
 /// Classifies the navia-didcomm kind inside a navia-messaging `InvalidState`.
 ///
-/// On v1.1.2 the kinds that reach this function are navia-didcomm's
+/// Since v1.1.2 the kinds that reach this function are navia-didcomm's
 /// `InvalidState` and the kinds navia-messaging folds into it, all transient; the
 /// permanent arms serve the v1.1.1 shape, which wrapped every kind.
 ///
@@ -211,14 +212,18 @@ pub fn classify_unpack_failure(err: &navia_messaging::error::Error) -> UnpackFai
 /// material without the `z` prefix or with an unknown or wrong multicodec prefix
 /// stays `IllegalArgument`, as in 1.3.0. A failed sender DID resolution keeps
 /// the DID resolver's kind: `DIDNotResolved`, or `Malformed` / `Unsupported`
-/// for a DID document navia-messaging's resolver cannot map. Two faults of the
-/// frame still carry a kind a transient failure has too: a sender DID that does
-/// not resolve is `DIDNotResolved`, and a sender kid missing from its DID
-/// document is `DIDUrlNotFound`. The kind alone cannot tell those, or a genuine
-/// navia-didcomm `InvalidState`, apart from a transient failure, so they stay
-/// transient and fail the same way on every redelivery; a consumer has to cap
-/// redeliveries per frame (the stored payload with the mediator's `delivery_id`
-/// left out, since the mediator mints a new `delivery_id` for every delivery).
+/// for a DID document navia-messaging's resolver cannot map. That resolver
+/// (v1.1.3) resolves only did:peer and did:key: a sender DID of any other
+/// method is `Unsupported`, refused without a lookup, and a did:peer or did:key
+/// DID its method's resolver panics on is `Malformed`. Two faults of the frame
+/// still carry a kind a transient failure has too: a did:peer or did:key sender
+/// DID that does not resolve is `DIDNotResolved`, and a sender kid missing from
+/// its DID document is `DIDUrlNotFound`. The kind alone cannot tell those, or a
+/// genuine navia-didcomm `InvalidState`, apart from a transient failure, so they
+/// stay transient and fail the same way on every redelivery; a consumer has to
+/// cap redeliveries per frame (the stored payload with the mediator's
+/// `delivery_id` left out, since the mediator mints a new `delivery_id` for
+/// every delivery).
 fn classify_didcomm_kind(kind: navia_didcomm::error::ErrorKind) -> UnpackFailure {
     use navia_didcomm::error::ErrorKind;
 
@@ -278,9 +283,10 @@ mod tests {
         MessagingError::new(MessagingKind::InvalidState, DidcommError::msg(kind, "test"))
     }
 
-    /// The shape the pinned v1.1.2's `DidcommMessaging::unpack` returns:
-    /// navia-didcomm's error converted with `From`, which carries its kind over
-    /// (1:1, or `InvalidState` for a kind navia-messaging has no name for).
+    /// The shape `DidcommMessaging::unpack` returns since v1.1.2 (the pinned
+    /// v1.1.3 included): navia-didcomm's error converted with `From`, which
+    /// carries its kind over (1:1, or `InvalidState` for a kind navia-messaging
+    /// has no name for).
     fn passed_through(kind: DidcommKind) -> MessagingError {
         MessagingError::from(DidcommError::msg(kind, "test"))
     }

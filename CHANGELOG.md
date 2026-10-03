@@ -62,6 +62,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decoded) end to end through the FFI; the other relabels rest on
   navia-didcomm's and navia-messaging's own tests and the kind mapping in
   `handler.rs`.
+- `rust/Cargo.toml` now pins navia-messaging by tag `v1.1.3` instead of branch
+  `main` (`rust/Cargo.lock`: 1.1.3 at `f372890`). An authcrypt frame names its
+  sender DID in the unauthenticated `skid` / `apu`, and the sender DID is
+  resolved before anything is decrypted. 1.1.3's DID resolver resolves only
+  did:peer and did:key, refuses every other method as `Unsupported` without
+  looking the DID up, and reports a panic of the did:peer or did:key resolver as
+  `Malformed`. So `DidComInterface.unpack` now throws
+  `UnpackingError::DecryptionFailed` (`Decryption failed: Unsupported crypto or
+  method: ... DID method not supported`) for a sender DID of any other method,
+  such as `did:web:example.com` or `did:unknown:nobody`, where 1.1.2 threw
+  `DatabaseError` (`Storage operation failed: unpack - DID not resolved: ...`)
+  for a method the DID cache client does not resolve, fetched the DID document
+  of a did:web from the host it names, and panicked on a did:web the DID cache
+  client cannot parse (`did:web:a!b`). That panic surfaced as
+  `DidCommError::GeneralError` (Kotlin `DidCommException.GeneralException`,
+  `task ... panicked with message ...`) off a Tokio runtime and unwound out of
+  `unpack` inside one. A did:peer sender DID its resolver panics on, such as
+  `did:peer:2` cut off after the numalgo, now throws
+  `UnpackingError::MalformedMessage` (`Malformed message: Malformed: ... DID
+  resolution failed on a malformed DID`) instead of the same panic. A consumer
+  acknowledges both on the first delivery. A did:peer or did:key sender DID
+  that does not resolve still throws `DatabaseError` over `DIDNotResolved`, a
+  malformed one included unless it panics its method's resolver
+  (`did:peer:4nobody`, an unknown did:peer purpose code, key material that is
+  not base58 as in `did:key:z0OIl`), and a sender key its DID document does not
+  list still throws it over `DIDUrlNotFound`. Unpack resolves three more DIDs a
+  frame names before anything is authenticated: the signer DID of a JWS, whose
+  kid sits in the unprotected header, a bare-DID `next` of a routing forward
+  inside an anoncrypt layer, and the issuer DID of the `from_prior` JWT of a
+  bare or anoncrypted plaintext, whose kid sits in the JWT header and is
+  resolved before the JWT signature is verified. 1.1.2 panicked on
+  `did:web:a!b` there too; 1.1.3 refuses those DIDs as it refuses a sender DID,
+  and fails a did:peer one with the kind a sender DID gets (`Malformed` when it
+  panics the resolver, `DIDNotResolved` when it does not resolve). `pack` and
+  `pack_no_forward` refuse a recipient DID of another method the same way, with
+  `PackingError` (`Unsupported crypto or method: ... DID method not
+  supported`). No sender, signer, forward `next`, `from_prior` issuer or
+  recipient DID makes the resolver fetch anything any more.
+  `rust/navia-core/tests/error_scenarios.rs` pins the unpack cases end to end
+  through the FFI (the `from_prior` issuer in a bare plaintext), and runs the
+  did:web and cut-off did:peer cases both off and inside a Tokio runtime.
+  The FFI surface and the UniFFI checksums are unchanged: navia-core changes
+  only comments in `handler.rs`, none on the FFI, and the Swift bindings
+  generated from this build match the committed `ios/Navia/Generated/`.
 - The `DidComInterface.unpack` doc comment (`interface.rs`) says the redelivery
   cap for a `DatabaseError` is per frame, not per `delivery_id`, as `handler.rs`
   and `docs/API.md` have since 1.4.0, and describes the navia-didcomm 1.3.1
@@ -113,8 +157,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   listed above throw `UnpackingException` / `UnpackingError` where they threw
   `DatabaseException` / `DatabaseError`, so a consumer that branches on the
   exception class (nyx-android does) acknowledges them on the first delivery.
-  Keep the redelivery cap for `DatabaseError`: a sender DID that does not
-  resolve and a sender key its DID document does not list still land there.
+  Keep the redelivery cap for `DatabaseError`: a did:peer or did:key sender,
+  signer, forward `next` or `from_prior` issuer DID that does not resolve (a
+  malformed one its resolver does not panic on included) and a sender key its
+  DID document does not list still land there.
+- Behaviour change on unpack from the navia-messaging 1.1.3 pin: an authcrypt
+  sender DID, a JWS signer DID, a bare-DID forward `next` or a `from_prior`
+  issuer DID whose method is neither did:peer nor did:key throws
+  `UnpackingException` / `UnpackingError` where it threw `DatabaseException` /
+  `DatabaseError` or, for one the DID cache client cannot parse,
+  `GeneralException` / `GeneralError`, and so does a did:peer or did:key one its
+  resolver panics on. A consumer that branches on the exception class
+  acknowledges those frames on the first delivery instead of at the redelivery
+  cap. Navia's own DIDs are did:peer, so genuine traffic is unaffected.
 
 ## [1.4.0] - 2026-09-29
 

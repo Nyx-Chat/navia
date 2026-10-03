@@ -6,7 +6,7 @@ resolver = "2"
 uniffi = "0.28.2"
 # Using our fork with security fixes and quantum resistance
 navia-didcomm = { git = "https://github.com/Nyx-Chat/navia-didcomm.git", branch = "main" }
-navia-messaging = { git = "https://github.com/Nyx-Chat/navia-messaging.git", branch = "main"}
+navia-messaging = { git = "https://github.com/Nyx-Chat/navia-messaging.git", tag = "v1.1.3" }
 askar-storage = { git = "https://github.com/openwallet-foundation/askar.git", tag = "v0.4.5" }
 async-trait = "0.1.83"
 serde_json = "1.0.132"
