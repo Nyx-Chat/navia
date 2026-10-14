@@ -67,7 +67,7 @@ dependencies {
 
     // Kotlin - matching nyx-android versions
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.20")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 }
 
 // Task to build Rust libraries before Android build
