@@ -50,12 +50,11 @@ android/.cxx/
 android/src/main/java/uniffi/
 android/src/main/jniLibs/
 
-# iOS
-ios/Pods/
+# iOS (ios/build holds the XCFramework scripts/build-xcframework.sh builds)
 ios/build/
 ios/DerivedData/
-ios/*.xcworkspace/
-ios/*.xcodeproj/xcuserdata/
+.build/
+.swiftpm/
 
 # Rust
 rust/target/

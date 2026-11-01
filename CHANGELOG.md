@@ -8,16 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- iOS as a Swift package. `scripts/build-xcframework.sh` builds
+  `navia_coreFFI.xcframework`, `libnavia_core.a` for `aarch64-apple-ios` and
+  `aarch64-apple-ios-sim` (iOS 17.0+) with the UniFFI header and module map in
+  `Headers/navia_coreFFI/`, zips it, writes its SwiftPM checksum, and
+  regenerates `ios/Navia/Generated` from the same build. The root
+  `Package.swift` (local path use) has the product `Navia`: that XCFramework
+  plus the Swift bindings, compiled in Swift 5 language mode and linked
+  against `Security`, `CoreFoundation` and `iconv`.
+- `ios/SPMSmoke`, a Swift 6 package whose test links `Navia` through SwiftPM
+  and runs open, `generateDid`, `packNoForward` and `unpack` on a simulator.
+- PR Validation's `iOS Package & Test` job builds the XCFramework, checks the
+  committed bindings, runs the SPMSmoke test on a simulator picked from
+  `xcrun simctl list devices available`, links the same test bundle against
+  the device slice (`build-for-testing` for `generic/platform=iOS`, unsigned),
+  and uploads the `navia-ios-spm` artifact (zip, checksum, `navia_core.swift`).
 - Full support for Android 15+ 16KB page size requirements
 - Automatic 16KB alignment verification during build process
 - Post-build alignment fix tools for native libraries
 - CI/CD validation for 16KB alignment on all releases
 
 ### Changed
+- `navia-core` also builds a `staticlib` (`crate-type = ["cdylib",
+  "staticlib", "lib"]`); the Android `cdylib` is unchanged.
+- The release takes its iOS files from the PR Validation run's `navia-ios-spm`
+  artifact (it fails before tagging when that artifact is missing) and
+  attaches `navia_coreFFI.xcframework-<version>.zip`, its `.checksum` and
+  `navia_core-<version>.swift` instead of `Navia.xcframework-<version>.zip`.
 - Updated minimum Android NDK requirement from r25b to r27c for 16KB support
 - Removed cargo-ndk from build process as it interferes with alignment flags
 - Updated CI/CD workflows to use NDK r27c and verify alignment
 - Enhanced build scripts with automatic alignment fixes
+
+### Removed
+- `Navia.podspec`, `ios/Navia.xcodeproj` with its `Navia.framework`,
+  `ios/Navia/Navia.h`, `ios/NaviaTests` and `scripts/build-for-ios.sh`. The pod
+  did not link, and `Navia.framework` linked `libnavia_core.dylib` by its build
+  path without embedding it, so apps stopped at launch. CocoaPods users and
+  users of the `Navia.xcframework` of releases up to 1.5.0 move to the Swift
+  package.
 
 ### Fixed
 - Native libraries now properly align all LOAD segments to 16KB boundaries

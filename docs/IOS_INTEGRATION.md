@@ -4,75 +4,150 @@ This guide covers how to integrate Navia into your iOS application.
 
 ## Installation
 
-Navia reaches iOS in two ways today: the CocoaPods podspec in this repository
-(`Navia.podspec`), or the XCFramework attached to each GitHub release. There is
-no Swift Package Manager package (the repository has no `Package.swift`).
+Navia reaches iOS as a Swift package: the root `Package.swift` of this
+repository. Its library product `Navia` is made of two targets:
 
-CI builds the framework and runs its tests on the machine that built it, but
-nothing in CI installs the pod or links an app against the released
-XCFramework. Both paths have known problems, described under each one below;
-check them before you rely on either.
+- `navia_coreFFI`, a binary target: `navia_coreFFI.xcframework`, the Rust
+  library as a static library (`libnavia_core.a`) with an `arm64` device slice
+  and an `arm64` simulator slice (Apple Silicon simulators only), each with the
+  C header and module map UniFFI generates. It needs iOS 17.0 or later.
+- `Navia`, the UniFFI Swift bindings (`ios/Navia/Generated/navia_core.swift`),
+  compiled in Swift 5 language mode and linked against the system frameworks
+  and libraries the static library needs (`Security`, `CoreFoundation`,
+  `libiconv`).
 
-### CocoaPods
+The XCFramework is a build output and is not committed, so the package works
+by local path only: a dependency on this repository by git URL finds no
+XCFramework. Build it from source, or wrap the files of a CI run or a release
+in a package of your own.
 
-Add to your `Podfile`:
+The Swift bindings and the XCFramework must come from the same build. At the
+first call the bindings compare their UniFFI API checksums with the library's,
+and stop the app with `UniFFI API checksum mismatch` when they differ.
 
-```ruby
-pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.5.0'
-```
+### Build from source (local path)
 
-Then run:
 ```bash
-pod install
+scripts/build-xcframework.sh     # or: make build-ios
 ```
 
-The pod builds the Rust library from source: its script phase runs
-`scripts/build-for-ios.sh --release --package` before Swift compiles. The machine
-that builds your app needs:
+The machine that builds needs:
 
-- Xcode with the iOS SDKs (the script calls `xcrun --sdk iphoneos` and
-  `xcrun --sdk iphonesimulator`; the command-line tools alone do not have them)
-- `rustup` with the stable and nightly toolchains, and network access: the
-  script runs `rustup target add` for both, then builds and runs
-  `uniffi-bindgen` with `cargo +nightly`
+- Xcode with the iOS SDKs (the command-line tools alone do not have them)
+- `rustup`; the script adds the `aarch64-apple-ios` and `aarch64-apple-ios-sim`
+  targets to the active toolchain when they are missing
 - Read access to the private `Nyx-Chat/navia-didcomm` and
   `Nyx-Chat/navia-messaging` repositories, with git credentials cargo can use
   (for example `net.git-fetch-with-cli = true` in `~/.cargo/config.toml`), since
-  cargo fetches both from GitHub
+  cargo fetches both from GitHub. With `CARGO_NET_OFFLINE=true` it builds from
+  the dependencies cargo has already fetched.
 
-**Known problem: the pod does not link today.** Inside Xcode the script builds
-only the target for the current SDK, and that path never creates
-`rust/target/universal/<mode>`, the only directories the podspec's
-`LIBRARY_SEARCH_PATHS` name. The crate also builds only a dynamic library
-(`crate-type = ["cdylib", "lib"]`, no `staticlib`) that nothing embeds, and
-`-lnavia_core` is set only on the pod target, not on the app. Expect
-`ld: library 'navia_core' not found`, or undefined `uniffi_navia_core_*` symbols
-when the app links. The podspec needs fixing before this path works.
+It writes:
 
-### XCFramework from the GitHub release (Manual)
+| Path | Contents |
+|---|---|
+| `ios/build/navia_coreFFI.xcframework` | The XCFramework `Package.swift` uses |
+| `ios/build/navia_coreFFI.xcframework.zip` | The XCFramework, zipped |
+| `ios/build/navia_coreFFI.xcframework.zip.checksum` | The zip's SwiftPM checksum (`swift package compute-checksum`) |
+| `ios/build/navia_core.swift` | The Swift bindings of this build |
 
-Each release attaches `Navia.xcframework-<version>.zip` to its
-[GitHub release](https://github.com/Nyx-Chat/navia/releases). It holds an
-`arm64` device slice and an `arm64` simulator slice (Apple Silicon simulators
-only).
+and regenerates `ios/Navia/Generated` (bindings, header and module map) from
+the same build. Commit `ios/Navia/Generated` with every Rust change to the FFI:
+CI fails when the committed copy differs from what the build generates.
 
-1. Download `Navia.xcframework-<version>.zip` from the release you want and unzip it
-2. Drag `Navia.xcframework` into your Xcode project
-3. Ensure it's added to "Frameworks, Libraries, and Embedded Content"
-4. Set "Embed" to "Embed & Sign"
+Then add the checkout as a local package: in Xcode, **File > Add Package
+Dependencies… > Add Local…**, or in a manifest:
 
-**Check before you ship: the framework may fail to load at launch.**
-`Navia.framework` links `libnavia_core.dylib`, no build phase embeds that dylib,
-and rustc gives it its absolute build path as its install name. Run:
-
-```bash
-otool -L Navia.xcframework/ios-arm64/Navia.framework/Navia
+```swift
+dependencies: [
+    .package(name: "Navia", path: "../navia"),
+],
+targets: [
+    .target(name: "MyApp", dependencies: [.product(name: "Navia", package: "Navia")]),
+]
 ```
 
-If a `libnavia_core.dylib` entry points at a build machine path (for example
-under `/Users/runner/work/`), an app that embeds the framework stops at launch
-with dyld's `Library not loaded`. In that case this release's XCFramework cannot
-be used as is.
+`ios/SPMSmoke` is such a package. Its test opens a store, generates a DID,
+packs a message and unpacks it on a simulator; run it after a build:
+
+```bash
+cd ios/SPMSmoke
+xcodebuild test -scheme SPMSmoke -destination 'platform=iOS Simulator,name=iPhone 17'
+```
+
+(any iPhone simulator on iOS 17 or later; `xcrun simctl list devices available`
+lists them).
+
+That links only the simulator slice. To link the same test against the device
+slice, without a device or signing:
+
+```bash
+xcodebuild build-for-testing -scheme SPMSmoke -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+```
+
+CI runs both.
+
+### From a CI build or a release
+
+Every PR Validation run uploads the artifact `navia-ios-spm`, kept 7 days. It
+holds the three files a consumer needs from one build:
+`navia_coreFFI.xcframework.zip`, `navia_coreFFI.xcframework.zip.checksum` and
+`navia_core.swift`.
+
+```bash
+gh run download <run-id> -R Nyx-Chat/navia -n navia-ios-spm
+```
+
+The release workflow attaches the same files to the GitHub release it creates,
+as `navia_coreFFI.xcframework-<version>.zip`,
+`navia_coreFFI.xcframework-<version>.zip.checksum` and
+`navia_core-<version>.swift`. Releases up to 1.5.0 do not have them; their
+`Navia.xcframework-<version>.zip` is the retired framework described below.
+
+Wrap the files in a package of your own, with the same settings as the root
+`Package.swift`:
+
+```swift
+targets: [
+    // The unzipped XCFramework, or the zip by URL with the checksum file's
+    // contents: .binaryTarget(name: "navia_coreFFI", url: "…", checksum: "…")
+    .binaryTarget(name: "navia_coreFFI", path: "navia_coreFFI.xcframework"),
+    .target(
+        name: "Navia",
+        dependencies: ["navia_coreFFI"],
+        path: "Sources/Navia", // navia_core.swift
+        swiftSettings: [.swiftLanguageMode(.v5)],
+        linkerSettings: [
+            .linkedFramework("Security"),
+            .linkedFramework("CoreFoundation"),
+            .linkedLibrary("iconv"),
+        ]
+    ),
+]
+```
+
+### Swift 6 apps
+
+UniFFI 0.28's generated Swift is not concurrency-clean under the Swift 6
+language mode, so the `Navia` target compiles it in Swift 5 mode. A Swift 6
+module imports it with `@preconcurrency import Navia`. None of the generated
+types are `Sendable`: keep each `DidComInterface` inside one isolation domain,
+such as one actor. `ios/SPMSmoke` is a Swift 6 consumer.
+
+### Retired: CocoaPods and `Navia.framework`
+
+`Navia.podspec`, `ios/Navia.xcodeproj` and `scripts/build-for-ios.sh` are gone.
+Neither path they served worked:
+
+- The pod did not link. Inside Xcode its script built only the current SDK's
+  target and never created `rust/target/universal/<mode>`, the only
+  directories the podspec's `LIBRARY_SEARCH_PATHS` named; the crate built no
+  `staticlib`; and `-lnavia_core` was set on the pod target only, not on the
+  app.
+- `Navia.framework`, which releases up to 1.5.0 attach as
+  `Navia.xcframework-<version>.zip`, links `libnavia_core.dylib` by its absolute
+  build path, and nothing embeds that dylib, so an app that embeds the
+  framework stops at launch with dyld's `Library not loaded`. Do not use it.
 
 ## Basic Usage
 
@@ -83,27 +158,27 @@ import Navia
 import Foundation
 
 class NaviaManager {
-    private var interface: DidComInterface?
+    private(set) var interface: DidComInterface?
     
-    func initialize() async throws {
-        // Create interface
-        interface = DidComInterface(path: "")
-        
-        // Generate or retrieve secure seed (32 bytes)
-        let seed = try getSecureSeed()
-        
+    func initialize(mediatorDid: String) async throws {
         // Open database
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
         let dbPath = "\(documentsPath)/navia.db"
         
-        try await interface?.open(path: dbPath, seed: seed)
+        // Create interface; pack() wraps every message in a forward for this mediator
+        let interface = DidComInterface(path: dbPath, mediatorDid: mediatorDid)
+        
+        // Generate or retrieve secure seed (32 bytes)
+        let seed = try getSecureSeed()
+        
+        try await interface.open(path: dbPath, seed: seed)
+        self.interface = interface
     }
     
-    private func getSecureSeed() throws -> [UInt8] {
+    private func getSecureSeed() throws -> Data {
         // Use iOS Keychain to store/retrieve the seed
         // This is a simplified example - implement proper Keychain handling
-        let seedData = Data(repeating: 42, count: 32)
-        return Array(seedData)
+        return Data(repeating: 42, count: 32)
     }
 }
 ```
@@ -129,12 +204,12 @@ func createDID() async throws -> String {
 ### Send Messages
 
 ```swift
-func sendMessage(to recipientDID: String, content: String) async throws {
+func sendMessage(from senderDID: String, to recipientDID: String, content: String) async throws {
     guard let interface = interface else {
         throw NaviaError.notInitialized
     }
     
-    let message = DIDCommMessage(
+    let message = DidCommMessage(
         id: UUID().uuidString,
         msgType: "https://didcomm.org/basicmessage/2.0/message",
         body: """
@@ -150,7 +225,7 @@ func sendMessage(to recipientDID: String, content: String) async throws {
     let encryptedMessage = try await interface.pack(
         msg: message,
         from: senderDID,
-        to: recipientDID
+        to: [recipientDID]
     )
     
     // Send encryptedMessage over your transport layer (HTTP, WebSocket, etc.)
@@ -161,15 +236,19 @@ func sendMessage(to recipientDID: String, content: String) async throws {
 ### Receive Messages
 
 ```swift
-func receiveMessage(_ encryptedMessage: String) async throws -> DIDCommMessage {
+func receiveMessage(_ encryptedMessage: String) async throws -> DidCommMessage {
     guard let interface = interface else {
         throw NaviaError.notInitialized
     }
     
     let message = try await interface.unpack(msg: encryptedMessage)
     
-    print("Received message: \(message.body)")
-    print("From: \(message.from ?? "anonymous")")
+    // Trust `from` only when unpack proved it
+    if message.authenticated, let sender = message.from {
+        print("From: \(sender)")
+    } else {
+        print("From: unauthenticated")
+    }
     
     return message
 }
@@ -295,7 +374,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         
         Task {
             do {
-                try await naviaManager.initialize()
+                try await naviaManager.initialize(mediatorDid: mediatorDid)
             } catch {
                 print("Failed to initialize Navia: \(error)")
             }
@@ -312,13 +391,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationWillEnterForeground(_ application: UIApplication) {
         // Verify health status when returning to foreground
         Task {
-            do {
-                let isHealthy = try await naviaManager.interface?.isHealthy() ?? false
-                if !isHealthy {
-                    print("Navia health check failed - consider reinitializing")
-                }
-            } catch {
-                print("Health check error: \(error)")
+            let isHealthy = await naviaManager.interface?.isHealthy() ?? false
+            if !isHealthy {
+                print("Navia health check failed - consider reinitializing")
             }
         }
     }
@@ -329,7 +404,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 ```swift
 class NaviaManager {
-    private var interface: DidComInterface?
+    private(set) var interface: DidComInterface?
     
     deinit {
         // UniFFI handles cleanup automatically
@@ -350,9 +425,12 @@ enum NaviaError: Error {
     case notInitialized
     case invalidSeed
     case databaseError(String)
+    case parsingError(String)
+    case didGenerationError(String)
     case packingError(String)
     case unpackingError(String)
     case validationError(String)
+    case generalError(String)
 }
 
 extension DidCommError {
@@ -360,6 +438,10 @@ extension DidCommError {
         switch self {
         case .DatabaseError(let message):
             return .databaseError(message)
+        case .ParsingError(let message):
+            return .parsingError(message)
+        case .DidGenerationError(let message):
+            return .didGenerationError(message)
         case .PackingError(let message):
             return .packingError(message)
         case .UnpackingError(let message):
@@ -367,7 +449,7 @@ extension DidCommError {
         case .ValidationError(let message):
             return .validationError(message)
         case .GeneralError(let message):
-            return .databaseError(message) // Generic fallback
+            return .generalError(message)
         }
     }
 }
@@ -375,54 +457,53 @@ extension DidCommError {
 
 ## Testing
 
-```swift
-import XCTest
-@testable import YourApp
+`ios/SPMSmoke` (see [Build from source](#build-from-source-local-path)) is a
+working test against the package. An XCTest version of the same round trip,
+with a throwaway store per test:
 
-class NaviaIntegrationTests: XCTestCase {
-    var naviaManager: NaviaManager!
+```swift
+import Foundation
+import XCTest
+@preconcurrency import Navia
+
+final class NaviaIntegrationTests: XCTestCase {
+    private var directory: URL!
+    private var interface: DidComInterface!
     
     override func setUp() async throws {
-        naviaManager = NaviaManager()
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let dbPath = directory.appendingPathComponent("navia.db").path
         
-        // Use in-memory database for tests
-        let interface = DidComInterface(path: "")
-        let testSeed = Array(repeating: UInt8(42), count: 32)
-        try await interface.open(path: ":memory:", seed: testSeed)
-        naviaManager.interface = interface
+        interface = DidComInterface(path: dbPath, mediatorDid: "did:peer:placeholder")
+        try await interface.open(path: dbPath, seed: Data(repeating: 42, count: 32))
     }
     
-    override func tearDown() {
-        naviaManager = nil
-    }
-    
-    func testDIDGeneration() async throws {
-        let did = try await naviaManager.createDID()
-        XCTAssertTrue(did.hasPrefix("did:peer:"))
+    override func tearDown() async throws {
+        interface = nil
+        try? FileManager.default.removeItem(at: directory)
     }
     
     func testMessageRoundTrip() async throws {
-        let alice = try await naviaManager.createDID()
-        let bob = try await naviaManager.createDID()
+        let did = try await interface.generateDid(uri: "https://example.com/didcomm", routingKeys: [])
+        XCTAssertTrue(did.hasPrefix("did:peer:"))
         
-        let originalMessage = DIDCommMessage(
+        let originalMessage = DidCommMessage(
             id: "test-1",
-            msgType: "test/message",
-            body: #"{"test": true}"#,
-            from: alice,
-            to: [bob]
+            msgType: "https://didcomm.org/basicmessage/2.0/message",
+            body: #"{"test":true}"#,
+            from: did,
+            to: [did]
         )
         
-        let encrypted = try await naviaManager.interface!.pack(
-            msg: originalMessage,
-            from: alice,
-            to: bob
-        )
-        
-        let decrypted = try await naviaManager.interface!.unpack(msg: encrypted)
+        // packNoForward: pack() would wrap the frame in a forward for the mediator
+        let encrypted = try await interface.packNoForward(msg: originalMessage, from: did, to: [did])
+        let decrypted = try await interface.unpack(msg: encrypted)
         
         XCTAssertEqual(originalMessage.id, decrypted.id)
         XCTAssertEqual(originalMessage.body, decrypted.body)
+        XCTAssertTrue(decrypted.authenticated)
     }
 }
 ```
@@ -446,9 +527,26 @@ class NaviaIntegrationTests: XCTestCase {
 
 ### Common Issues
 
-**"Library not found" error:**
-- Ensure the framework is properly embedded in your app target
-- Check that the minimum deployment target is iOS 13.0
+**"UniFFI API checksum mismatch" at the first Navia call:**
+- The Swift bindings and the XCFramework come from different builds. Take both
+  from one run of `scripts/build-xcframework.sh`, one `navia-ios-spm` artifact
+  or one release
+
+**"…/ios/build/navia_coreFFI.xcframework does not contain binary artifact" when the package resolves:**
+- `ios/build/navia_coreFFI.xcframework` has not been built in this checkout;
+  run `scripts/build-xcframework.sh`
+
+**Undefined symbols such as `_SecTrustEvaluateWithError` or `_CFRelease` when the app links:**
+- A package that wraps the XCFramework itself is missing the linker settings
+  of the `Navia` target: `Security`, `CoreFoundation` and `iconv`
+
+**A minimum platform version error for iOS:**
+- The package and the XCFramework need iOS 17.0; raise the app's deployment
+  target to iOS 17.0 or later
+
+**No library for the simulator is found when building:**
+- The simulator slice is `arm64` only: build on an Apple Silicon Mac; Intel
+  simulators (`x86_64`) are not supported
 
 **Keychain access denied:**
 - Check your app's entitlements and Keychain access groups
