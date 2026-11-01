@@ -39,7 +39,8 @@ jobs:
               - 'scripts/verify-*.sh'
             ios:
               - 'ios/**'
-              - 'Navia.podspec'
+              - 'Package.swift'
+              - 'scripts/build-xcframework.sh'
             android:
               - 'android/**'
             docs:
@@ -107,58 +108,14 @@ jobs:
           cd rust/navia-core
           cargo test --doc
 
-  # iOS build - run in parallel with Android build using matrix strategy
-  ios-build:
-    name: iOS Build (${{ matrix.target }})
-    runs-on: macos-15
-    needs: [changes, quick-checks]
-    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true' || needs.changes.outputs.workflows == 'true') && !cancelled() && !failure()
-    strategy:
-      matrix:
-        target: [aarch64-apple-ios, aarch64-apple-ios-sim]
-        include:
-          - target: aarch64-apple-ios
-            sdk: iphoneos
-            config: Release-iphoneos
-          - target: aarch64-apple-ios-sim
-            sdk: iphonesimulator
-            config: Release-iphonesimulator
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Setup Rust Environment
-        uses: ./.github/actions/setup-rust-env
-        env:
-          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-        with:
-          targets: ${{ matrix.target }}
-      
-      - name: Build Rust library for iOS (${{ matrix.target }})
-        run: |
-          cd rust/navia-core
-          cargo build --release --target ${{ matrix.target }}
-      
-      - name: Build iOS framework (${{ matrix.sdk }})
-        run: |
-          cd ios
-          xcodebuild -project Navia.xcodeproj -scheme Navia -configuration Release -sdk ${{ matrix.sdk }} -arch arm64 -derivedDataPath build/DerivedData BUILD_LIBRARY_FOR_DISTRIBUTION=YES build
-      
-      - name: Upload iOS artifacts (${{ matrix.target }})
-        uses: actions/upload-artifact@v6
-        with:
-          name: ios-${{ matrix.target }}
-          path: |
-            rust/target/${{ matrix.target }}/release/libnavia_core.a
-            ios/build/DerivedData/Build/Products/${{ matrix.config }}/Navia.framework/
-          retention-days: 7
-
-  # Collect iOS artifacts and run tests
+  # iOS: the static navia_coreFFI.xcframework and the Swift bindings from the
+  # same build, checked against the committed bindings and linked through
+  # SwiftPM into a smoke test that runs on a simulator and is linked for a
+  # device. The release takes the navia-ios-spm artifact this job uploads.
   ios-package:
     name: iOS Package & Test
     runs-on: macos-15
-    needs: [changes, ios-build]
+    needs: [changes, quick-checks]
     if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true' || needs.changes.outputs.workflows == 'true') && !cancelled() && !failure()
     steps:
       - uses: actions/checkout@v5
@@ -170,58 +127,41 @@ jobs:
         env:
           GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
         with:
-          targets: aarch64-apple-ios-sim
+          targets: aarch64-apple-ios aarch64-apple-ios-sim
       
-      - name: Download iOS artifacts
-        uses: actions/download-artifact@v7
-        with:
-          pattern: ios-*
-          path: ./ios-artifacts/
-          merge-multiple: true
-      
-      - name: Setup iOS artifacts structure
+      - name: Build navia_coreFFI.xcframework
+        run: scripts/build-xcframework.sh
+
+      # scripts/build-xcframework.sh regenerated ios/Navia/Generated from this
+      # commit's Rust source, from the same build as the XCFramework. The
+      # committed copy has to match it: stale bindings fail at the first FFI
+      # call with "UniFFI API checksum mismatch", and a doc-only edit on an
+      # export is enough to move its checksum.
+      - name: Check the committed Swift bindings are current
         run: |
-          # Create directory structure
-          mkdir -p rust/target/aarch64-apple-ios/release
-          mkdir -p rust/target/aarch64-apple-ios-sim/release
-          mkdir -p ios/build/DerivedData/Build/Products/Release-iphoneos
-          mkdir -p ios/build/DerivedData/Build/Products/Release-iphonesimulator
-          
-          # Copy Rust libraries
-          find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios/release*" -exec cp {} rust/target/aarch64-apple-ios/release/ \;
-          find ios-artifacts -name "libnavia_core.a" -path "*aarch64-apple-ios-sim/release*" -exec cp {} rust/target/aarch64-apple-ios-sim/release/ \;
-          
-          # Copy frameworks
-          find ios-artifacts -name "Navia.framework" -path "*Release-iphoneos*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphoneos/ \;
-          find ios-artifacts -name "Navia.framework" -path "*Release-iphonesimulator*" -exec cp -r {} ios/build/DerivedData/Build/Products/Release-iphonesimulator/ \;
-          
-          # Verify artifacts
-          ls -la rust/target/*/release/
-          ls -la ios/build/DerivedData/Build/Products/*/
-      
-      - name: Upload final iOS artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: ios-build-artifacts
-          path: |
-            rust/target/aarch64-apple-ios/release/libnavia_core.a
-            rust/target/aarch64-apple-ios-sim/release/libnavia_core.a
-            ios/build/DerivedData/Build/Products/Release-iphoneos/Navia.framework/
-            ios/build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework/
-          retention-days: 7
-      
-      - name: Run iOS tests
+          if [ -n "$(git status --porcelain --untracked-files=all -- ios/Navia/Generated)" ]; then
+            echo "::error title=Stale Swift bindings::ios/Navia/Generated differs from the bindings this build generated from the Rust source. Regenerate them (scripts/build-xcframework.sh) and commit ios/Navia/Generated with the Rust change. The changes follow."
+            git status --short --untracked-files=all -- ios/Navia/Generated
+            git --no-pager diff --stat -- ios/Navia/Generated
+            git --no-pager diff -- ios/Navia/Generated | head -n 200 || true
+            exit 1
+          fi
+          echo "ios/Navia/Generated matches the bindings generated from the Rust source"
+
+      - name: Run the SwiftPM smoke test on a simulator
         run: |
-          cd ios
+          cd ios/SPMSmoke
           # Pick a simulator this runner has: the first iPhone on the newest iOS
           # runtime the active Xcode can run. The macOS image's simulator set
           # changes, so a hard-coded name/OS pair fails whenever the image does not
           # ship it. The image also installs newer Xcodes whose iOS runtimes the
           # shared simulator service lists as available, while xcodebuild here is
           # the image's default Xcode, which rejects a runtime newer than its SDK's
-          # major version; so cap the runtime at that major version.
+          # major version; so cap the runtime at that major version. The floor is
+          # the iOS 17 platform of Package.swift.
+          MIN_IOS_MAJOR=17
           SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version) || {
-            echo "::error title=No iOS Simulator SDK::The active Xcode ($(xcode-select -p)) has no iphonesimulator SDK, so NaviaTests cannot run."
+            echo "::error title=No iOS Simulator SDK::The active Xcode ($(xcode-select -p)) has no iphonesimulator SDK, so the SPMSmoke test cannot run."
             exit 1
           }
           SDK_MAJOR=${SDK_VERSION%%.*}
@@ -231,13 +171,13 @@ jobs:
               exit 1
               ;;
           esac
-          SIMULATOR=$(xcrun simctl list devices available -j | jq -r --argjson sdk "$SDK_MAJOR" '
+          SIMULATOR=$(xcrun simctl list devices available -j | jq -r --argjson sdk "$SDK_MAJOR" --argjson min "$MIN_IOS_MAJOR" '
             [ .devices
               | to_entries[]
               | select(.key | test("SimRuntime\\.iOS-[0-9]"))
               | { version: (.key | capture("iOS-(?<v>[0-9-]+)$").v | split("-") | map(tonumber)),
                   iphones: [ .value[] | select(.name | startswith("iPhone")) ] }
-              | select(.version[0] <= $sdk)
+              | select(.version[0] >= $min and .version[0] <= $sdk)
               | select(.iphones | length > 0) ]
             | sort_by(.version)
             | last
@@ -245,30 +185,34 @@ jobs:
               else "\(.iphones[0].udid)\t\(.iphones[0].name), iOS \(.version | map(tostring) | join("."))"
               end')
           if [ -z "$SIMULATOR" ]; then
-            echo "::error title=No iPhone simulator::This runner has no available iPhone simulator on an iOS ${SDK_MAJOR}.x or older runtime (active Xcode $(xcode-select -p), iphonesimulator SDK ${SDK_VERSION}), so NaviaTests cannot run. Available devices follow."
+            echo "::error title=No iPhone simulator::This runner has no available iPhone simulator on an iOS runtime from ${MIN_IOS_MAJOR}.0 to ${SDK_MAJOR}.x (active Xcode $(xcode-select -p), iphonesimulator SDK ${SDK_VERSION}), so the SPMSmoke test cannot run. Available devices follow."
             xcrun simctl list devices available
             exit 1
           fi
           IFS=$'\t' read -r SIMULATOR_ID SIMULATOR_NAME <<< "$SIMULATOR"
-          echo "Running NaviaTests on $SIMULATOR_NAME ($SIMULATOR_ID)"
-          xcodebuild -project Navia.xcodeproj -scheme NaviaTests -configuration Debug -sdk iphonesimulator -destination "platform=iOS Simulator,id=$SIMULATOR_ID" test
+          echo "Running SPMSmoke on $SIMULATOR_NAME ($SIMULATOR_ID)"
+          xcodebuild test -scheme SPMSmoke -destination "platform=iOS Simulator,id=$SIMULATOR_ID"
 
-      # The Navia target's "Build Rust Library" script phase runs
-      # scripts/build-for-ios.sh --package, which regenerated ios/Navia/Generated
-      # from this commit's Rust source while the tests built. The committed copy
-      # has to match it: stale bindings fail at the first FFI call with "UniFFI
-      # API checksum mismatch", and a doc-only edit on an export is enough to
-      # move its checksum.
-      - name: Check the committed Swift bindings are current
+      # The simulator test links only the ios-arm64-simulator slice. This links
+      # the same test bundle against the ios-arm64 device slice, without a
+      # device or signing, so a device slice built for the wrong platform or
+      # missing a symbol the bindings reference fails here and not at the first
+      # device build of an app.
+      - name: Link the SwiftPM smoke test for an iOS device
         run: |
-          if [ -n "$(git status --porcelain --untracked-files=all -- ios/Navia/Generated)" ]; then
-            echo "::error title=Stale Swift bindings::ios/Navia/Generated differs from the bindings this build generated from the Rust source. Regenerate them (scripts/build-for-ios.sh --package) and commit ios/Navia/Generated with the Rust change. The changes follow."
-            git status --short --untracked-files=all -- ios/Navia/Generated
-            git --no-pager diff --stat -- ios/Navia/Generated
-            git --no-pager diff -- ios/Navia/Generated | head -n 200 || true
-            exit 1
-          fi
-          echo "ios/Navia/Generated matches the bindings generated from the Rust source"
+          cd ios/SPMSmoke
+          xcodebuild build-for-testing -scheme SPMSmoke -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload navia-ios-spm
+        uses: actions/upload-artifact@v6
+        with:
+          name: navia-ios-spm
+          path: |
+            ios/build/navia_coreFFI.xcframework.zip
+            ios/build/navia_coreFFI.xcframework.zip.checksum
+            ios/build/navia_core.swift
+          if-no-files-found: error
+          retention-days: 7
 
   # Android build - run in parallel with iOS build using matrix strategy
   android-build:

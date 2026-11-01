@@ -10,7 +10,7 @@ help:
 	@echo "  make dev         - Start development (setup + check)"
 	@echo "  make test        - Run all tests"
 	@echo "  make build-android - Build for Android (all architectures)"
-	@echo "  make build-ios    - Build for iOS (all architectures)"
+	@echo "  make build-ios    - Build the iOS XCFramework and Swift bindings"
 	@echo "  make fmt         - Format all code"
 	@echo "  make clean       - Clean build artifacts"
 
@@ -33,9 +33,9 @@ test:
 build-android:
 	@cd scripts && ./build-for-android.sh --package
 
-## Build for iOS
+## Build for iOS (ios/build/navia_coreFFI.xcframework, ios/Navia/Generated)
 build-ios:
-	@cd scripts && ./build-for-ios.sh --package
+	@./scripts/build-xcframework.sh
 
 ## Format code
 fmt:

@@ -114,15 +114,15 @@ jobs:
               || fail "Could not list the artifacts of PR Validation run $id."
             if jq -e '
               [ .artifacts[] | select(.expired == false) | .name ] as $names
-              | all("android-lib-arm64-v8a", "android-lib-x86_64", "ios-build-artifacts";
+              | all("android-lib-arm64-v8a", "android-lib-x86_64", "navia-ios-spm";
                     . as $want | any($names[]; . == $want))' <<< "$ARTIFACTS" >/dev/null; then
               RUN_ID=$id
               break
             fi
-            echo "PR Validation run $id lacks an unexpired android-lib-arm64-v8a, android-lib-x86_64 or ios-build-artifacts artifact"
+            echo "PR Validation run $id lacks an unexpired android-lib-arm64-v8a, android-lib-x86_64 or navia-ios-spm artifact"
           done
           if [ -z "$RUN_ID" ]; then
-            fail "PR #$PR_NUMBER has no successful PR Validation run for its head $PR_HEAD_SHA that still holds android-lib-arm64-v8a, android-lib-x86_64 and ios-build-artifacts (they are kept 7 days). Re-run all jobs of that PR's PR Validation run from the Actions tab, wait for it to pass, then re-run this workflow. No tag was pushed and nothing was published."
+            fail "PR #$PR_NUMBER has no successful PR Validation run for its head $PR_HEAD_SHA that still holds android-lib-arm64-v8a, android-lib-x86_64 and navia-ios-spm (they are kept 7 days). Re-run all jobs of that PR's PR Validation run from the Actions tab, wait for it to pass, then re-run this workflow. No tag was pushed and nothing was published."
           fi
           echo "Using PR Validation run $RUN_ID: https://github.com/$REPO/actions/runs/$RUN_ID"
           echo "RUN_ID=$RUN_ID" >> "$GITHUB_OUTPUT"
@@ -234,16 +234,7 @@ jobs:
             
             #### iOS
             
-            Both iOS paths below have known problems (the pod does not link today; the XCFramework may fail to load at launch). Read [Installation in the iOS Integration Guide](https://github.com/Nyx-Chat/navia/blob/${{ steps.get_version.outputs.VERSION }}/docs/IOS_INTEGRATION.md#installation) before using either.
-            
-            **CocoaPods:**
-            Add to your `Podfile`:
-            ```ruby
-            pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => '${{ steps.get_version.outputs.VERSION }}'
-            ```
-            
-            **XCFramework (Manual):**
-            Download `Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip` from the release assets, unzip it and drag `Navia.xcframework` into your Xcode project.
+            Swift Package Manager, iOS 17.0+ (`arm64` devices and Apple Silicon simulators). The release assets hold `navia_coreFFI.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip` (the static XCFramework), its SwiftPM checksum `navia_coreFFI.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip.checksum`, and `navia_core-${{ steps.get_version.outputs.RAW_VERSION }}.swift`, the Swift bindings generated from the same build. Use the zip and the Swift file of one release together; [Installation in the iOS Integration Guide](https://github.com/Nyx-Chat/navia/blob/${{ steps.get_version.outputs.VERSION }}/docs/IOS_INTEGRATION.md#installation) shows the package that wraps them.
             
             ---
             *This release was automatically created when the version was bumped in Cargo.toml*
@@ -271,9 +262,10 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # iOS build and framework creation
+  # iOS assets: the static navia_coreFFI.xcframework zip, its SwiftPM checksum
+  # and the Swift bindings generated from the same build
   ios-release:
-    runs-on: macos-15
+    runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
     needs: release-and-publish
     if: needs.release-and-publish.outputs.tag_created == 'true'
     permissions:
@@ -296,86 +288,53 @@ jobs:
 
       # The same PR Validation run the Android binaries came from; the
       # release-and-publish job picked it and checked this artifact exists.
-      - name: Download iOS artifacts from PR validation
+      - name: Download navia-ios-spm from PR validation
         if: needs.release-and-publish.outputs.tag_created == 'true'
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: pr-validation.yml
           run_id: ${{ needs.release-and-publish.outputs.validation_run_id }}
-          name: ios-build-artifacts
+          name: navia-ios-spm
           path: ./ios-artifacts/
           if_no_artifact_found: fail
 
-      - name: Setup iOS artifacts
+      - name: Stage the iOS release assets
         if: needs.release-and-publish.outputs.tag_created == 'true'
+        env:
+          RAW_VERSION: ${{ steps.get_version.outputs.RAW_VERSION }}
         run: |
-          # Debug: Check what was actually downloaded
-          echo "=== Downloaded iOS artifacts structure ==="
-          find ios-artifacts -type f -name "*.a" -o -name "*.framework" | head -20
-          ls -la ios-artifacts/ || true
-          
-          # Create directory structure
-          mkdir -p rust/target/aarch64-apple-ios/release
-          mkdir -p rust/target/aarch64-apple-ios-sim/release
-          mkdir -p ios/build/DerivedData/Build/Products/Release-iphoneos
-          mkdir -p ios/build/DerivedData/Build/Products/Release-iphonesimulator
-          
-          # Copy Rust library artifacts with enhanced fallback search
-          find ios-artifacts -name "libnavia_core.a" | while read lib; do
-            echo "Found library: $lib"
-            if [[ "$lib" == *"aarch64-apple-ios-sim"* ]]; then
-              echo "Copying to iOS simulator target..."
-              cp "$lib" rust/target/aarch64-apple-ios-sim/release/
-            elif [[ "$lib" == *"aarch64-apple-ios"* ]]; then
-              echo "Copying to iOS device target..."
-              cp "$lib" rust/target/aarch64-apple-ios/release/
-            fi
+          fail() {
+            echo "::error title=Incomplete navia-ios-spm artifact::$1"
+            exit 1
+          }
+          for name in navia_coreFFI.xcframework.zip navia_coreFFI.xcframework.zip.checksum navia_core.swift; do
+            COUNT=$(find ios-artifacts -type f -name "$name" | grep -c . || true)
+            [ "$COUNT" = 1 ] || fail "navia-ios-spm holds $COUNT files named $name, expected 1."
           done
-          
-          # Copy iOS framework artifacts with enhanced fallback search
-          find ios-artifacts -name "Navia.framework" | while read framework; do
-            echo "Found framework: $framework"
-            if [[ "$framework" == *"Release-iphoneos"* ]]; then
-              echo "Copying to iOS device framework..."
-              cp -r "$framework" ios/build/DerivedData/Build/Products/Release-iphoneos/
-            elif [[ "$framework" == *"Release-iphonesimulator"* ]]; then
-              echo "Copying to iOS simulator framework..."
-              cp -r "$framework" ios/build/DerivedData/Build/Products/Release-iphonesimulator/
-            fi
-          done
-          
-          # Verify artifacts are in place
-          echo "=== Rust libraries after setup ==="
-          ls -la rust/target/*/release/ || echo "No Rust libraries found"
-          echo "=== iOS frameworks after setup ==="
-          ls -la ios/build/DerivedData/Build/Products/*/ || echo "No iOS frameworks found"
-          
-          echo "✅ iOS artifacts downloaded and positioned"
+          ZIP=$(find ios-artifacts -type f -name navia_coreFFI.xcframework.zip)
+          CHECKSUM=$(find ios-artifacts -type f -name navia_coreFFI.xcframework.zip.checksum)
+          SWIFT=$(find ios-artifacts -type f -name navia_core.swift)
 
-      - name: Create XCFramework
-        if: needs.release-and-publish.outputs.tag_created == 'true'
-        run: |
-          cd ios
-          
-          # Verify framework paths exist
-          ls -la build/DerivedData/Build/Products/Release-iphoneos/ || echo "Device build not found"
-          ls -la build/DerivedData/Build/Products/Release-iphonesimulator/ || echo "Simulator build not found"
-          
-          # Create XCFramework combining device and simulator builds
-          xcodebuild -create-xcframework \
-            -framework build/DerivedData/Build/Products/Release-iphoneos/Navia.framework \
-            -framework build/DerivedData/Build/Products/Release-iphonesimulator/Navia.framework \
-            -output Navia.xcframework
-          
-          # Archive the XCFramework
-          zip -r Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip Navia.xcframework
+          # The SwiftPM checksum of a binary target is the SHA-256 of its zip.
+          if [ "$(sha256sum "$ZIP" | cut -d' ' -f1)" != "$(tr -d '[:space:]' < "$CHECKSUM")" ]; then
+            fail "navia_coreFFI.xcframework.zip.checksum does not match the zip."
+          fi
 
-      - name: Upload iOS XCFramework to Release
+          mkdir -p ios-release
+          cp "$ZIP" "ios-release/navia_coreFFI.xcframework-$RAW_VERSION.zip"
+          cp "$CHECKSUM" "ios-release/navia_coreFFI.xcframework-$RAW_VERSION.zip.checksum"
+          cp "$SWIFT" "ios-release/navia_core-$RAW_VERSION.swift"
+          ls -la ios-release
+
+      - name: Upload the iOS assets to the release
         if: needs.release-and-publish.outputs.tag_created == 'true'
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
-          files: ./ios/Navia.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip
-
+          fail_on_unmatched_files: true
+          files: |
+            ./ios-release/navia_coreFFI.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip
+            ./ios-release/navia_coreFFI.xcframework-${{ steps.get_version.outputs.RAW_VERSION }}.zip.checksum
+            ./ios-release/navia_core-${{ steps.get_version.outputs.RAW_VERSION }}.swift

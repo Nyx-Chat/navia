@@ -80,6 +80,50 @@ curl -H "Authorization: token YOUR_TOKEN" \
   https://maven.pkg.github.com/Nyx-Chat/navia/com/nyx/navia/1.5.0/navia-1.5.0.aar
 ```
 
+### iOS: "does not contain binary artifact"
+
+**Symptoms:**
+```
+error: …/ios/build/navia_coreFFI.xcframework does not contain binary artifact
+```
+
+**Cause:** the root `Package.swift` takes `navia_coreFFI.xcframework` from
+`ios/build`, a build output that a fresh checkout does not have. A dependency
+on the repository by git URL never has it.
+
+**Solution:** build it, then add the checkout by local path:
+```bash
+scripts/build-xcframework.sh
+```
+Or wrap the `navia-ios-spm` CI artifact or a release's assets in a package of
+your own (see [Installation in the iOS Integration Guide](IOS_INTEGRATION.md#installation)).
+
+### iOS: "UniFFI API checksum mismatch"
+
+**Symptoms:** the app stops at the first Navia call with
+```
+Fatal error: UniFFI API checksum mismatch: try cleaning and rebuilding your project
+```
+
+**Cause:** the Swift bindings (`navia_core.swift`) and the XCFramework come
+from different builds. Any change to an exported function, including its doc
+comment, moves its checksum.
+
+**Solutions:**
+
+1. Take both from one run of `scripts/build-xcframework.sh`, one
+   `navia-ios-spm` artifact or one release.
+2. After a Rust change to the FFI, commit the regenerated
+   `ios/Navia/Generated` with it; PR Validation fails while the committed copy
+   is stale.
+
+### iOS: CocoaPods or `Navia.xcframework`
+
+`Navia.podspec` and the `Navia.framework` that releases up to 1.5.0 attach as
+`Navia.xcframework-<version>.zip` are retired: the pod does not link, and the
+framework stops the app at launch with dyld's `Library not loaded`. Move to the
+Swift package (see [Installation in the iOS Integration Guide](IOS_INTEGRATION.md#installation)).
+
 ## Runtime Errors
 
 ### Database Initialization Failures
@@ -334,7 +378,7 @@ android {
 }
 ```
 
-### iOS (Future)
+### iOS
 
 #### Keychain Access Issues
 

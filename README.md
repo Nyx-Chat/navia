@@ -9,7 +9,7 @@ Navia is a high-performance DIDComm v2 messaging library for Android and iOS, bu
 - 📦 **Native Types** - Structured data types for Kotlin/Swift, no JSON string manipulation required
 - ⚡ **Async/Await Support** - Non-blocking operations throughout
 - 🗄️ **Aries Askar Storage** - Secure key management and storage
-- 📱 **Mobile Ready** - Android 15+ (16KB pages) and iOS 13+ support
+- 📱 **Mobile Ready** - Android 15+ (16KB pages) and iOS 17+ support
 
 ## Documentation
 
@@ -42,15 +42,21 @@ that has the `read:packages` scope (see
 
 #### iOS
 
-Add to your `Podfile`:
+Navia is a Swift package (`Package.swift` at the repository root, iOS 17+)
+over a static XCFramework that you build first, then add by local path:
 
-```ruby
-pod 'Navia', :git => 'https://github.com/Nyx-Chat/navia.git', :tag => 'v1.5.0'
+```bash
+scripts/build-xcframework.sh   # builds ios/build/navia_coreFFI.xcframework
 ```
 
-The pod does not link today, and the release XCFramework may fail to load at
-launch; see [Installation in the iOS Integration Guide](docs/IOS_INTEGRATION.md#installation)
-before you use either.
+```swift
+.package(name: "Navia", path: "../navia")
+```
+
+CI runs and releases provide the XCFramework zip and its Swift bindings too.
+See [Installation in the iOS Integration Guide](docs/IOS_INTEGRATION.md#installation);
+the CocoaPods pod and the `Navia.xcframework` of releases up to 1.5.0 are
+retired.
 
 ### Basic Usage
 
@@ -99,8 +105,8 @@ if (received.authenticated && sender != null) {
 import Navia
 
 // Initialize
-let didcomm = DidComInterface(path: "")
-let seed = generateSecure32ByteSeed()
+let didcomm = DidComInterface(path: "/path/to/database", mediatorDid: mediatorDid)
+let seed: Data = generateSecure32ByteSeed()
 try await didcomm.open(path: "/path/to/database", seed: seed)
 
 // Generate DID
@@ -110,7 +116,7 @@ let myDid = try await didcomm.generateDid(
 )
 
 // Send encrypted message
-let message = DIDCommMessage(
+let message = DidCommMessage(
     id: UUID().uuidString,
     msgType: "https://didcomm.org/basicmessage/2.0/message",
     body: #"{"content": "Hello, secure world!"}"#,
@@ -118,7 +124,7 @@ let message = DIDCommMessage(
     to: [recipientDid]
 )
 
-let encrypted = try await didcomm.pack(msg: message, from: myDid, to: recipientDid)
+let encrypted = try await didcomm.pack(msg: message, from: myDid, to: [recipientDid])
 
 // Receive: act on `from` only when unpack proved it
 let received = try await didcomm.unpack(msg: incomingFrame)
@@ -153,14 +159,14 @@ For detailed integration instructions, see the [Android Integration Guide](ANDRO
 rustup target add aarch64-linux-android x86_64-linux-android
 
 # iOS targets (macOS only)
-rustup target add aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 ```
 
 2. **Platform-specific tools**:
    - **Android**: NDK r27c or r28 (required for 16KB page size support)
      - Set `ANDROID_NDK_ROOT` or install in standard location
      - ⚠️ **Important**: NDK r27+ is required for Android 15+ compatibility
-   - **iOS**: Xcode 15+ with command line tools (macOS only)
+   - **iOS**: Xcode 16+ with the iOS SDKs (macOS only)
 
 ### Build Process
 
@@ -173,19 +179,23 @@ cd navia
 cd scripts
 ./build-for-android.sh --package
 
-# Build for iOS (macOS only, all architectures)
-./build-for-ios.sh --package
+# Build for iOS (macOS only): navia_coreFFI.xcframework and its Swift bindings
+./build-xcframework.sh
 
 # Or use Make
 cd ..
 make build-android  # Builds Android package
-make build-ios      # Builds iOS package
+make build-ios      # Builds the iOS XCFramework
 ```
 
-Build modes:
-- **Local** (default): Builds only for current architecture (connected device/simulator)
+Android build modes:
+- **Local** (default): Builds only for current architecture (connected device/emulator)
 - **All** (`--all`): Builds for all architectures locally
 - **Package** (`--package`): Full build for distribution
+
+The iOS build always builds the device and simulator slices in release mode;
+see [Installation in the iOS Integration Guide](docs/IOS_INTEGRATION.md#installation)
+for what it writes.
 
 See [Troubleshooting](docs/TROUBLESHOOTING.md) for build issues.
 
@@ -237,6 +247,9 @@ The project uses GitHub Actions with three main workflows:
 1. **PR Validation** (`pr-validation.yml`): Runs on pull requests
    - Rust tests and clippy
    - Android library build verification
+   - iOS: builds `navia_coreFFI.xcframework`, checks the committed Swift
+     bindings match it, runs the `ios/SPMSmoke` test on a simulator, links it
+     for a device and uploads the `navia-ios-spm` artifact
    - Security audit
 
 2. **PR Checks** (`pr-checks.yml`): Additional quality checks
@@ -249,7 +262,8 @@ The project uses GitHub Actions with three main workflows:
    - Tags `v<version>` itself, and skips the release when that tag already exists
    - Takes the binaries from the release PR's own PR Validation run
    - Publishes the AAR to GitHub Packages
-   - Creates the GitHub release and attaches `Navia.xcframework-<version>.zip`
+   - Creates the GitHub release and attaches `navia_coreFFI.xcframework-<version>.zip`,
+     its `.checksum` and the Swift bindings `navia_core-<version>.swift`
 
 ### Publishing New Version
 
@@ -257,20 +271,16 @@ Bump every version in one release commit:
 
 1. `rust/navia-core/Cargo.toml` `version`, and the `navia-core` entry in `rust/Cargo.lock`
 2. `android/gradle.properties` `VERSION_NAME`
-3. `Navia.podspec` `spec.version`
-4. `ios/Navia.xcodeproj/project.pbxproj` `MARKETING_VERSION = <version>`, in all
-   four build configurations (Navia and NaviaTests, Debug and Release). Nothing
-   derives it from `Cargo.toml`, so it stays behind unless it is bumped here.
-5. The install snippets in `README.md`, `ANDROID_INTEGRATION.md`,
-   `docs/IOS_INTEGRATION.md` and `docs/TROUBLESHOOTING.md`
-6. `CHANGELOG.md`: the section for the new version
+3. The install snippets in `README.md`, `ANDROID_INTEGRATION.md` and
+   `docs/TROUBLESHOOTING.md`
+4. `CHANGELOG.md`: the section for the new version
 
 Then merge the commit to `main` through a pull request. The push that changes
 `rust/navia-core/Cargo.toml` starts the release; do not tag by hand, since the
 workflow skips a version whose tag already exists.
 
 The release does not build the libraries itself. It publishes the Android
-libraries and iOS frameworks that the release PR's own PR Validation run built
+libraries and the iOS XCFramework that the release PR's own PR Validation run built
 (the successful run for the PR's head commit), never those of another PR. So:
 
 - Merge only after PR Validation passed on the PR's final commit, and within 7
