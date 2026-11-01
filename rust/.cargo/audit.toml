@@ -1,5 +1,5 @@
 # Security audit configuration for navia
-# Last updated: 2026-09-28
+# Last updated: 2026-11-02
 
 [advisories]
 # List of security advisories to ignore
@@ -28,4 +28,14 @@ ignore = [
     "RUSTSEC-2026-0099", # rustls-webpki 0.101: wildcard name constraints
     "RUSTSEC-2026-0098", # rustls-webpki 0.101: URI name constraints
     "RUSTSEC-2026-0258", # h2 0.3: unbounded empty DATA frames
+    "RUSTSEC-2026-0346", # rustls 0.21: Debug impls expose TLS secrets
+    "RUSTSEC-2026-0349", # rustls 0.21: unauthenticated ServerHello downgrade
+    "RUSTSEC-2026-0382", # rustls-webpki 0.101: distrusted intermediates accepted
+    "RUSTSEC-2026-0381", # webpki-roots 0.25: distrusted emSign intermediates
+
+    # Transitive, no fixed release on the line the tree can use (2026-11-02).
+    # crypto-bigint 0.3 (der 0.5 under rsa 0.6 / ssi-jwk) and 0.5 (elliptic-curve
+    # 0.13 under askar-crypto, k256 and p256); the fix exists only in 0.7, which
+    # needs the RustCrypto 0.14 line. Drop this when askar-crypto and ssi move.
+    "RUSTSEC-2026-0387", # crypto-bigint: timing variability in constant-time ops
 ]
