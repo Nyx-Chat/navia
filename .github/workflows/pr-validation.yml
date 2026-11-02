@@ -108,6 +108,36 @@ jobs:
           cd rust/navia-core
           cargo test --doc
 
+  # iOS: each static slice on its own, so a slice that stops compiling is named
+  # in the check that fails. The same slices go into the XCFramework below.
+  ios-build:
+    name: iOS Build (${{ matrix.target }})
+    runs-on: macos-15
+    needs: [changes, quick-checks]
+    if: (needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true' || needs.changes.outputs.workflows == 'true') && !cancelled() && !failure()
+    strategy:
+      matrix:
+        target: [aarch64-apple-ios, aarch64-apple-ios-sim]
+    env:
+      IPHONEOS_DEPLOYMENT_TARGET: '17.0'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust-env
+        env:
+          GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build the static library (${{ matrix.target }})
+        run: |
+          cd rust/navia-core
+          cargo build --release --locked --target ${{ matrix.target }}
+          test -f ../target/${{ matrix.target }}/release/libnavia_core.a
+
   # iOS: the static navia_coreFFI.xcframework and the Swift bindings from the
   # same build, checked against the committed bindings and linked through
   # SwiftPM into a smoke test that runs on a simulator and is linked for a
